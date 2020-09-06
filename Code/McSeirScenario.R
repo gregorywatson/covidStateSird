@@ -152,7 +152,7 @@ mcSeirScenario <- function(
 
       seir.out <- do.call("rbind", resultList)[, c("replicate", "time", model.output)]
     }
-  } else if((all.equal(func, sir7) == TRUE)) {
+  } else if((all.equal(func, sird) == TRUE)) {
 
     if (nThreads == 1) {
       for(j in 1:n.rep) {
@@ -323,7 +323,7 @@ seir <- function(times, state, parameters) {
 }
 
 
-sir7 <- function(times, state, parameters) # h = 20 for FL, CA; h = 4 for NV
+sird <- function(times, state, parameters) # h = 20 for FL, CA; h = 4 for NV
 {
   with(as.list(c(state, parameters)), {
     du <- exp( (1/b_s) * exp(b_s * (times + t_s) + a_s) + c_s) * exp(b_s * (times + t_s) + a_s)

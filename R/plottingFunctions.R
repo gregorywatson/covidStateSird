@@ -1,3 +1,143 @@
+plotCols <- c("#AEC441", "#008875", "#0094D6", "#F2E000", "#C362A6", "#F78F1E")
+
+#' @export
+plotCumulativeCases <- function(allS, state, statePop, plotT, endPlot, plotCol = plotCols[2]) {
+    par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
+  
+    qC <- t(apply(statePop - allS, 1, quantile, probs = c(.05, .5,  .95),  na.rm =     TRUE))[1:length(plotT),]
+  
+    plot(plotT, qC[,2], col = NA, ylim = c(0, max(qC[,3])), xaxs = "i", xaxt = "n",
+         yaxt = "n", ylab = "", xlab = "")
+  
+    polygon(c(plotT, rev(plotT)),
+              c(qC[,1], rev(qC[,3])), col = paste0(plotCol,"30"), border = NA)
+              lines(plotT, qC[,2], col = plotCol, lwd = 2)
+              points(days, state[1,], pch = 19, col = "grey33")
+  
+    # x-axis tick marks
+    if(max(qC) > 500000) {
+      axisTicks <- seq(0,2000000,100000)
+    } else if(max(qC) > 100000) {
+        axisTicks <- seq(0,500000,50000)
+    } else if (max(qC) > 10000) {
+      axisTicks <- seq(0,500000,5000)
+    } else if (max(qC) > 1000) {
+      axisTicks <- seq(0,500000,500)
+    } else if (max(qC) > 100) {
+      axisTicks <- seq(0,500000,50)
+    } else {
+      axisTicks <- seq(0,500000,5)
+    }
+    axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
+    labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
+
+    axisDays <- as.Date(c("2020-03-01", "2020-05-01", "2020-07-01",  "2020-09-01", "2020-11-01"))
+   axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33", col   = "grey33", cex.axis = 1.25)
+
+     mtext("Cumulative Confirmed Cases", side=2, line=3.1, col="grey33", cex=1)
+}
+
+#' @export
+plotActiveCases <- function(allI, state, plotT, endPlot, plotCol = plotCols[5]) {
+    par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
+  par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
+
+  qI <- t(apply(allI, 1, quantile, probs = c(.05, .5,  .95),  na.rm = TRUE))[1:length(plotT),]
+
+  plot(plotT, qI[,2], col = NA, ylim = c(0, max(qI[,3]) * 1.04), xaxs = "i", xaxt = "n",
+        yaxt = "n", ylab = "", yaxs = "i", xlab = "")
+
+  polygon(c(plotT, rev(plotT)),
+  c(qI[,1], rev(qI[,3])), col = paste0(plotCol,"30"), border = NA)
+  lines(plotT, qI[,2], col = plotCol, lwd = 2)
+
+  if(max(qI) > 100000) {
+    axisTicks <- seq(0,500000,25000)
+  } else if (max(qI) > 10000) {
+    axisTicks <- seq(0,500000,5000)
+  } else if (max(qI) > 1000) {
+    axisTicks <- seq(0,500000,500)
+  } else if (max(qI) > 100) {
+    axisTicks <- seq(0,500000,50)
+  } else {
+    axisTicks <- seq(0,500000,5)
+  }
+    axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
+   labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
+
+ axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33",   col   = "grey33", cex.axis = 1.25)
+
+   mtext("Actively Infected Confirmed Cases", side=2, line=3.1, col="grey33", cex=1)
+}
+
+#' @export
+plotDailyDeaths <- function(allD, allStateFit, stateFit, state, plotT, endPlot, SAMPS, rfError, plotCol = plotCols[6]) {
+   par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
+  
+    allDD <- apply(allD, 2, diff)
+    qDD <- t(apply(allDD, 1, quantile, probs = c(.05, .5,  .95),  na.rm = TRUE))[1:length(plotT),]
+  
+    if(rfError) {
+      wideDeathLo <- matrix(allStateFit$deathLo, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
+      qDD[,1] <- t(apply(wideDeathLo, 1, quantile, probs = c(.05,.5),  na.rm = TRUE))[1:length(plotT),1]
+      wideDeathUp <- matrix(allStateFit$deathUp, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
+      qDD[,3] <- t(apply(wideDeathUp, 1, quantile, probs = c(.95,.5),  na.rm = TRUE))[1:length(plotT),1]
+    }
+  
+    plot(plotT, qDD[,2], col = NA, ylim = c(0, max(qDD[,3]) * 1.04), xaxs = "i", xaxt = "n",
+          yaxt = "n", ylab = "", yaxs = "i", xlab = "")
+  
+    polygon(c(plotT, rev(plotT)),
+    c(qDD[,1], rev(qDD[,3])), col = paste0(plotCol,"30"), border = NA)
+    lines(plotT, qDD[,2], col = plotCol, lwd = 2)
+    points(days[1:(length(days)-1)], diff(state[2,]), pch = 19, col = "grey33")
+  
+    if(max(qDD) > 1000) {
+      axisTicks <- seq(0,100000,100)
+    } else if (max(qDD) > 500) {
+      axisTicks <- seq(0,100000,100)
+    } else if (max(qDD) > 100) {
+      axisTicks <- seq(0,100000,50)
+      } else if (max(qDD) > 50) {
+        axisTicks <- seq(0,100000,10)
+      } else if (max(qDD) > 10) {
+        axisTicks <- seq(0,100000,5)
+      } else {
+      axisTicks <- seq(0,100000,1)
+    }
+  
+    axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
+    labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
+  
+    axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33",   col   = "grey33", cex.axis = 1.25)
+  
+     mtext("Daily Deaths", side=2, line=3.1, col="grey33", cex=1)
+}
+
+plotRt <- function(allRt, state, plotT, endPlot, plotCol = plotCols[1]) {
+  par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
+ 
+   qRt <- t(apply(allRt, 1, quantile, probs = c(.05, .5,  .95),  na.rm = TRUE))[1:length(plotT),]
+ 
+   plot(plotT, qRt[,2], col = NA, ylim = c(0, max(qRt[,3], na.rm = T)), xaxs = "i",
+        xaxt = "n", yaxt = "n", ylab = "", xlab = "")
+   abline(h = 1, col = "grey66", lty = 2)
+   polygon(c(plotT, rev(plotT)),
+     c(qRt[,1], rev(qRt[,3])), col = paste0(plotCol,"30"), border = NA)
+     lines(plotT, qRt[,2], col = plotCol, lwd = 2)
+     points(days, state[1,], pch = 19, col = "grey33")
+  
+   axisTicks <- seq(0,4,.5)
+   axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
+   labels = axisTicks, cex = .9, tick = F, hadj = .75)
+ 
+   mtext("Estimated Rt 10-day Moving Average", side=2, line=3.1, col="grey33", cex=1)
+ 
+   axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33",   col   = "grey33", cex.axis = 1.25)
+ 
+   mtext(stateAbbrev, outer=TRUE,  cex=2, line=-4)
+}
+
 #' @export
 plotVelocityFit <- function(posteriorMean, fileName = NULL) {
   if(!is.null(fileName)) {
