@@ -6,7 +6,7 @@ library(doParallel)
 # the last day of data to use
 endDate <- "2020-08-30"
 
-covidDir <- "/Users/gregw/Dropbox/Projects/covidSird/"
+covidDir <- "/Users/gregw/Dropbox/Projects/covidStateSird/"
 
 registerDoParallel(cores=5)
 
@@ -15,17 +15,6 @@ dir.create(outputPath)
 dir.create(file.path(outputPath, "/Tables/"))
 dir.create(file.path(outputPath, "/Plots/"))
 dir.create(file.path(outputPath, "/Data/"))
-
-velocities <- function(cases, deaths, countryName, provinceName = "") {
-  m = ncol(cases)
-  indx <- which((deaths$Country.Region == countryName) & 
-                (deaths$Province.State == provinceName))
-                
-  days <- jh.date[(day1[indx]:m) - 4]
-  sp <- smooth.spline(x = 1:(m - day1[indx] + 1), y = log(cases[indx,day1[indx]:m]))
-  sp.prime <- predict(sp, deriv = 1)
-  return(data.frame(y = sp.prime$y, t = sp.prime$x))
-}
 
 # ===============================================================
 
@@ -105,7 +94,6 @@ for(i in 1:length(states)) {
   if(states[i] == "SD")   minCase <- 102
   else minCase <- 100
   
-  
   velocLoc <- velocitiesState(statesLong, states[i], stateInterventions, minCases = minCase, endDate = endDate)
   covariatesLoc <- covariates[covariates$location == states[i],]
   population <- stateInterventions$statePopulation[stateInterventions$stateAbbreviation == states[i]]
@@ -153,7 +141,7 @@ riasJagsMS <- function(){
  start <- Sys.time()
 
 caseRiasFitMS <- jags.parallel(data = velocLogCasesListMS, inits = NULL, parameters.to.save = params,
-  model.file = riasJagsMS, n.chains = 3, n.iter = 200000, n.burnin = 10000, n.thin = 200, DIC = F)
+  model.file = riasJagsMS, n.chains = 3, n.iter = 200, n.burnin = 10, n.thin = 20, DIC = F)
 
  timeElapsed <- (Sys.time() - start)
 
@@ -191,11 +179,6 @@ dev.off()
 
 constErrLogNorm <- function(x, t, u, beta, alpha) {
   err <- (u - exp((1/c(beta)) * exp(c(beta) * t + c(alpha)) + c(x))) ^2
-  return(sum(err))
-}
-
-constErrLogNorm2 <- function(x, t, u, beta, alpha, xg) {
-  err <- (u - exp((1/c(beta)) * exp(c(beta) * t + c(alpha)) + c(x) + c(xg))) ^2
   return(sum(err))
 }
 

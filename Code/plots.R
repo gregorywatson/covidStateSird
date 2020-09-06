@@ -5,7 +5,6 @@ nVar <- length(rownames(randomForestDeathModel$importance))
 barplot(t(randomForestDeathModel$importance), col = plotCols[2], border = NA,
 ylab = "", yaxt = "n", xaxt = "n")
 
-
 varnames <- c("Location", "Male", "Age 0-24", "Age 25-34", "Age 35-44", "Age 45-54", "Age 55-64",
   "Age 65+", "Heart Disease", "Lung Cancer", "Diabetes", "COPD", "Urbanization", "Population", paste0("New Cases on t-",1:lagDays))
 

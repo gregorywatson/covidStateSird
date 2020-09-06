@@ -460,7 +460,7 @@ stateRun <- function(stateAbbrev, rfError = FALSE, plots = TRUE) {
   
     plot(plotT, qRt[,2], col = NA, ylim = c(0, max(qRt[,3], na.rm = T)), xaxs = "i",
          xaxt = "n", yaxt = "n", ylab = "", xlab = "")
-  
+    abline(h = 1, col = "grey66", lty = 2)
     polygon(c(plotT, rev(plotT)),
     c(qRt[,1], rev(qRt[,3])), col = paste0(plotCols[1],"30"), border = NA)
     lines(plotT, qRt[,2], col = plotCols[1], lwd = 2)
