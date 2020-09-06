@@ -3,6 +3,7 @@
 
 library(TTR)
 library(dplyr)
+library(covidStateSird)
 
 source(paste0(covidDir, "Code/McSeirScenario.R"))
 

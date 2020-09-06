@@ -2,6 +2,7 @@ library(R2jags)
 library(dplyr)
 library(randomForest)
 library(doParallel)
+library(covidStateSird)
 
 devtools::load_all()
 
@@ -62,68 +63,22 @@ velocLogCasesListMS <- velocLogCasesList
 velocLogCasesListMS$y[velocLogCasesList$y <= 0] <- NA
 velocLogCasesListMS$p <- 12
 
-riasJagsMS <- function(){
-  # Likelihood:
-  for (i in 1:N){
-    y[i] ~ dlnorm(mu[i], tau[i])
-
-    mu[i] <-  a[loc[i]] + b[loc[i]] * t[i] + (g[loc[i]] + d[loc[i]] * t[i]) * postIntervention[i]
-    tau[i] <- exp(alpha[loc[i]] + beta[loc[i]] * t[i])
-  }
-  
-  # Priors:
-  for(j in 1:nLoc) {
-    a[j] ~ dnorm(mu_a, 1) # random intercept for location
-    b[j] ~ dnorm(mu_b, 10) # random slope for location
-    g[j] ~ dnorm(mu_g, 1) # random effect for post-intervention
-    d[j] ~ dnorm(mu_d, 10) # random slope for post-intervention
-    alpha[j] ~ dnorm(mu_alpha, 1)
-       beta[j]  ~ dnorm(mu_beta, 10)
-  }
-  mu_a  ~ dnorm(-1, 1) # random intercept mean
-  mu_b  ~ dnorm(0, 10) # random slope mean
-  mu_g  ~ dnorm(0, 1) # random effect mean
-  mu_d  ~ dnorm(-.05, 10) # random slope mean
-  mu_alpha ~ dnorm(0,1)
-  mu_beta  ~ dnorm(0, 10)
-}
-
  params <- c("mu_a", "mu_b", "sigma", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "alpha", "beta", "mu_alpha", "mu_beta")
  
- start <- Sys.time()
+start <- Sys.time()
 
 caseRiasFitMS <- jags.parallel(data = velocLogCasesListMS, inits = NULL, parameters.to.save = params,
-  model.file = riasJagsMS, n.chains = 3, n.iter = 200, n.burnin = 10, n.thin = 20, DIC = F)
+  model.file = riasJagsModel, n.chains = 3, n.iter = 200, n.burnin = 10, n.thin = 20, DIC = F)
 
- timeElapsed <- (Sys.time() - start)
-
-pm <- caseRiasFitMS$BUGSoutput$mean
+timeElapsed <- (Sys.time() - start)
 
 plotVelocityFit(caseRiasFitMS$BUGSoutput$mean,
                 fileName = paste0(outputPath, "/Plots/velocityModelFit.pdf"))
 
-constErrLogNorm <- function(x, t, u, beta, alpha) {
-  err <- (u - exp((1/c(beta)) * exp(c(beta) * t + c(alpha)) + c(x))) ^2
-  return(sum(err))
-}
 
- c_S_pre <- foreach(k = 1:nrow(caseRiasFitMS$BUGSoutput$sims.matrix), .combine = 'rbind') %:%
-   foreach(i = 1:velocLogCasesList$nLoc, .combine = 'c')  %dopar% {
-     optim(6, constErrLogNorm, u = velocLogCases$u[(velocLogCases$loc == i) & (velocLogCases$postIntervention == 0)],
-          t = velocLogCases$t[(velocLogCases$loc == i) & (velocLogCases$postIntervention == 0)],
-       beta = caseRiasFitMS$BUGSoutput$sims.list$b[k,i],
-       alpha = caseRiasFitMS$BUGSoutput$sims.list$a[k,i],
-     method = "SANN")$par
-}
- 
-c_S_post <- foreach(k = 1:nrow(caseRiasFitMS$BUGSoutput$sims.matrix), .combine = 'rbind') %:%
-   foreach(i = 1:velocLogCasesList$nLoc, .combine = 'c')  %dopar% {
-     optim(6, constErrLogNorm, u = velocLogCases$u[velocLogCases$loc == i],
-       t = velocLogCases$t[velocLogCases$loc == i],
-       beta = caseRiasFitMS$BUGSoutput$sims.list$b[k,i] + caseRiasFitMS$BUGSoutput$sims.list$d[k,i],
-       alpha = caseRiasFitMS$BUGSoutput$sims.list$a[k,i] + caseRiasFitMS$BUGSoutput$sims.list$g[k,i],
-       method = "SANN") $par
-}
+c_S_pre <- caseModelConstant(caseRiasFitMS, intervention = 0)
+c_S_post <- caseModelConstant(caseRiasFitMS, intervention = 1)
+
 rownames(c_S_pre) <- NULL
 rownames(c_S_post) <- NULL
 
