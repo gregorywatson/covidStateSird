@@ -5,70 +5,34 @@ library(TTR)
 library(dplyr)
 
 source(paste0(covidDir, "Code/McSeirScenario.R"))
-source(paste0(covidDir, "Code/RFOOBInterval.R"))
 
 # --- Train Death model --------------------------------------------------------------------
 library(randomForest)
-library(dplyr) # critical for lag function
 
 plotCols <- c("#AEC441", "#008875", "#0094D6", "#F2E000", "#C362A6", "#F78F1E")
 
+
+
+stateCovidData <- read.csv(stateDataCSV)
+
+
 covariates <- read.csv(paste0(covidDir, "Data/COVID-19 Location Covariates - analyticStates.csv"))
+covariates <- covariates[, - which(names(covariates) == "stroke")]
 
-covariates[, c("heartDisease", "lungCancer", "diabetes", "stroke", "copd")] <-
-  covariates[, c("heartDisease", "lungCancer", "diabetes", "stroke", "copd")] / 100000
-  
-statesRF <- c("NY", "CA", "LA", "NJ", "MI", "IL", "GA", "FL", "TX", "PA", "AK", "AZ", "CO", "IN", "MN", "WA", "MO", "NV", "OH", "VA", "WI", "OR", "AL", "AR", "DE", "HI", "ID", "IA", "KS", "KY", "ME", "MS", "MT", "NE", "NM", "NC", "ND", "OK", "RI", "SC", "SD", "TN", "UT", "WV", "CT", "MD", "MA",
-    "NH", "VT", "WY")
+covariates[, c("heartDisease", "lungCancer", "diabetes", "copd")] <-
+covariates[, c("heartDisease", "lungCancer", "diabetes", "copd")] / 100000
 
-
-velocLogCases <- velocLogDeaths <- data.frame()
-loc <- 0
-for(i in 1:length(statesRF)) {
-  loc <- loc + 1
-   
-  velocLoc <- velocitiesState(statesLong, statesRF[i], stateInterventions, minCases = 0, endDate = endDate)
-  covariatesLoc <- covariates[covariates$location == statesRF[i],]
-  population <- stateInterventions$statePopulation[stateInterventions$stateAbbreviation == statesRF[i]]
-  velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases,  loc, covariatesLoc[,-1], population))
-}
-
-velocLogCasesList <- as.list(velocLogCases)
-velocLogCasesList$N <- nrow(velocLogCases)
-velocLogCasesList$nLoc <- length(unique(velocLogCasesList$loc))
-velocLogCasesList$p <- ncol(velocLogCases) - 3
-
-lagDays <- 21
-maxLag1 <- lagDays - 1
-deathModel <- NULL
-for(i in unique(velocLogCases$loc)) {
-  dDeaths <- diff(velocLogCases$deaths[velocLogCases$loc == i])[-(1:maxLag1)]
-  dCases  <- diff(velocLogCases$u[velocLogCases$loc == i])
-  
-  laggedNewCases <- NULL
-  for(k in 1:lagDays) {
-    laggedNewCases <- cbind(laggedNewCases, lag(dCases,k-1)[-(1:maxLag1)])
-  }
-  colnames(laggedNewCases) <- paste0("dCase",1:lagDays)
-
-  deathModel <- rbind(deathModel, cbind(velocLogCases[velocLogCases$loc ==   i,][-(1:(maxLag1+1)),], dDeaths, laggedNewCases))
-}
-  
-# remove strokes as covariate due to missing values
-deathModel <- deathModel[, - which(names(deathModel) == "stroke")]
-# deathModel <- deathModel[, - which(names(deathModel) == "loc")]
 set.seed(525600)
-randomForestDeathModel <- randomForest(dDeaths ~ ., data = deathModel[,-(1:5)], na.action = na.roughfix, keep.forest=TRUE, keep.inbag=TRUE)
+randomForestDeathModel <- deathForest(stateCovidData, states, covariates, 21, fileOut = paste0(outputPath, "/randomForestDeathModel.Rdata"))
 
-save(randomForestDeathModel, deathModel, file = paste0(outputPath, "/randomForestDeathModel.Rdata"))
+# save(randomForestDeathModel, deathModelData, file = paste0(outputPath, "/randomForestDeathModel.Rdata"))
 
 # ----------------------------------------------------------------------------------------------
 
-states <- c("NY", "CA", "LA", "NJ", "MI", "IL", "GA", "FL", "TX", "PA", "AK", "AZ", "CO", "IN", "MN", "WA", "MO", "NV", "OH", "VA", "WI", "OR", "AL", "AR", "DE", "HI", "ID", "IA", "KS", "KY", "ME", "MS", "MT", "NE", "NM", "NC", "ND", "OK", "RI", "SC", "SD", "TN", "UT", "WV", "CT", "MD", "MA", "NH", "VT", "WY")
 
 
-SAMPS <- sample(2850, 400)
-stateRun <- function(stateAbbrev, rfError = FALSE, plots = TRUE) {
+# SAMPS <- sample(2850, 400)
+stateRun <- function(stateAbbrev, rfError = FALSE, plots = TRUE, lagDays = 21) {
 
   minCases <- 100
   endDay <- endDate
@@ -135,7 +99,7 @@ stateRun <- function(stateAbbrev, rfError = FALSE, plots = TRUE) {
   allStateFit <- NULL
 
 #  SAMPS <- sample(N.POST, 400) #1:N.POST
-
+  SAMPS <- 1:N.POST
   for(M in SAMPS) {
 
     if(stateInterventions$interventionDate[which(stateInterventions$stateAbbreviation == stateAbbrev)]   == "") {
@@ -205,12 +169,12 @@ stateRun <- function(stateAbbrev, rfError = FALSE, plots = TRUE) {
   
     laggedNewCases <- NULL
      for(k in 1:lagDays) {
-       laggedNewCases <- cbind(laggedNewCases, lag(dCases,k-1)[-(1:maxLag1)])
+       laggedNewCases <- cbind(laggedNewCases, lag(dCases,k-1)[-(1:(lagDays - 1))])
      }
      colnames(laggedNewCases) <- paste0("dCase",1:lagDays)
   
     x0 <- cbind(covariates[covariates$location == stateAbbrev,-1],
-                loc = which(statesRF == stateAbbrev),
+                loc = which(states == stateAbbrev),
                 population = stateInterventions$statePopulation[stateInterventions$stateAbbreviation ==   stateAbbrev],
                 laggedNewCases, row.names = NULL)
   

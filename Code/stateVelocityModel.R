@@ -3,6 +3,8 @@ library(dplyr)
 library(randomForest)
 library(doParallel)
 
+devtools::load_all()
+
 # the last day of data to use
 endDate <- "2020-08-30"
 
@@ -17,56 +19,6 @@ dir.create(file.path(outputPath, "/Plots/"))
 dir.create(file.path(outputPath, "/Data/"))
 
 # ===============================================================
-
-velocitiesState <- function(statesLong, stateAbbrev, stateInterventions = NULL, minCases = 100, endDate = "2099-01-01") {
-
-  if(!is.null(stateInterventions)) {
-    intervDate <- stateInterventions$interventionDate[stateInterventions$stateAbbreviation == stateAbbrev]
-    if(intervDate == "") intervDate <- "2099-01-01"
-  }
-  stateLong <- statesLong[which(statesLong$state == stateAbbrev),]
-  n.day <- nrow(stateLong)
-  daysAll <- NULL
-  for(i in 1:n.day) {
-    daysAll[i] <-(paste(substr(stateLong$date[i],1,4),
-                        substr(stateLong$date[i],5,6),
-                        substr(stateLong$date[i],7,8), sep = "-") )
-  }
-  daysAll <- as.Date(daysAll)
-
-  stateLong <- stateLong[order(daysAll, decreasing = F),]
-  daysAll   <- daysAll[order(daysAll, decreasing = F)]
-        
-  stateAll <- rbind(stateLong$positive, stateLong$death, stateLong$hospitalizedCurrently)
-  state <- stateAll[,which(stateAll[1,] >= minCases)]
-  days  <- as.Date(daysAll[which(stateAll[1,] >= minCases)])
-  
-  postIntervention <- 1 * (days > intervDate)
-  
-  y <- log(state[1, !is.na(state[1,]) & (days <= endDate)])
-  x <- which(!is.na(state[1,]) & (days <= endDate))
-  splineCases <- smooth.spline(x = x[y > - Inf], y = y[y > -Inf])
-  derivCases <- predict(splineCases, deriv = 1)
-  
-  y <- log(state[2, !is.na(state[2,]) & (days <= endDate)])
-  x <- which(!is.na(state[2,]) & (days <= endDate))
-  splineDeaths <- smooth.spline(x = x[y > - Inf], y = y[y > -Inf])
-  derivDeaths <- predict(splineDeaths, deriv = 1)
-
-  return(list(cases = data.frame(y = derivCases$y,
-                                 t = derivCases$x,
-                                 u = state[1,derivCases$x],
-                                 postIntervention = postIntervention[derivCases$x],
-                                 deaths = state[2, derivCases$x]),
-              deaths = data.frame(y = derivDeaths$y,
-                                  t = derivDeaths$x,
-                                  u = state[2,derivDeaths$x],
-                                  hosps = state[3,derivDeaths$x],
-                                 postIntervention = postIntervention[derivDeaths$x]),
-              days = days,
-              intervDate = intervDate))
-}
-
 
 stateInterventions <- read.csv(paste0(covidDir, "Data/StateInterventionDates.csv"),
                                stringsAsFactors = FALSE,
@@ -147,41 +99,6 @@ caseRiasFitMS <- jags.parallel(data = velocLogCasesListMS, inits = NULL, paramet
 
 pm <- caseRiasFitMS$BUGSoutput$mean
 
-plotVelocityFit <- function(posteriorMean, fileName = NULL) {
-  if(!is.null(fileName)) {
-    pdf(file = fileName, width = 6, height = 6)
-  }
-  for(i in 1:length(states)) {
-      testV <- velocitiesState(statesLong, states[i], stateInterventions, minCases = 100)
-      tt <- testV$cases$t
-      y <- testV$cases$y
-      y[which(y <= 0)] <- NA
-      yy <-(y)
-  
-    plot(tt,(yy), col = "white", pch = 19, type = "o", lwd = .5, cex = .7,
-         main = states[i], ylim = range((yy), na.rm = T), ylab = "d/dt Log Cumulative Cases",   xlab = "Days Since 100+ Cases")
-      intv <- (testV$cases$postIntervention == 1)
-      points(tt,(yy), col = "#5D8AA8", pch = 19)
-      points(tt[!intv],(yy[!intv]), col = "#FB9FA4", pch = 19)
-  
-      pop <-  stateInterventions$statePopulation[stateInterventions$stateAbbreviation ==   states[i]]
-  
-      bb <- pm$a[i]
-      mm <- (pm$b[i])
-      ii <- min(which(intv)[1], 200, na.rm = T)
-  
-      curve(exp(bb + mm * x), 0, ii,col ="#FB9FA4", add = T)
-  
-      bb <- pm$a[i] + pm$g[i]
-      mm <- pm$b[i] + pm$d[i]
-  
-          curve(exp(bb+mm*x), ii, 1000, col = "#5D8AA8", add = T)
-  
-  }
-  if(!is.null(fileName)) {
-    dev.off()
-  }
-}
 plotVelocityFit(caseRiasFitMS$BUGSoutput$mean,
                 fileName = paste0(outputPath, "/Plots/velocityModelFit.pdf"))
 
