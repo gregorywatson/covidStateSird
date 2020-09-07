@@ -1,6 +1,3 @@
-
-
-
 library(TTR)
 library(dplyr)
 library(covidStateSird)
@@ -31,8 +28,10 @@ stateInterventions <- read.csv(paste0(covidDir, "Data/StateInterventionDates.csv
 load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 
 set.seed(525600)
+rm(list = "allStateFit")
 stateSird("CA", covariates, stateInterventions, stateCovidData, randomForestDeathModel,
-posteriorSamples)
+posteriorSamples, rfError = T)
+load("/Users/gregw/Dropbox/Projects/covidStateSird/Output/States/2020-09-06/Data/CA.Rdata")
 all.equal(allStateFit0, allStateFit)
 
 

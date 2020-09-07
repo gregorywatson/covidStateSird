@@ -90,7 +90,7 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
     init <- as.matrix(steps[nDay, 2:4, drop = F], nrow = 1)
     colnames(init) <- c("S", "I", "R")
   
-    stateFit <- try(mcMultiEpochSeirScenario(n.rep = 1,
+    stateFit <- try(multiEpochSird(n.rep = 1,
                             params = list(sirdParams),
                             init = init[1,],
                             times = list(c(0:(n.t-1))),
@@ -215,3 +215,168 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
     dev.off()
   }
 }
+
+
+#' Multi-epoch SIRD
+#'
+#' Conducts simulations for a multi-epoch SIRD model
+#'
+#' @param n.rep The number of simulation replicates. Defaults to 10.
+#' @param paramsList A list of parameter value lists. Each list entry must match \code{params} from \code{mcSeirScenario}.
+#' @param init Initial values for \code{S}, \code{E}, \code{I}, \code{R} and if \code{func = seira}, \code{A}, the ambient source of infection.
+#' @param timesList A list of time vectors.  Each list entry must match \code{times} from \code{mcSeirScenario} and be consecutive.
+#' @param interventionList A list of intervention vectors. Each list entry must match \code{intervention} from \code{mcSeirScenario}.
+#' @param nThreads The number of threads to use in multi-core computing.
+#' @param func The function defining the derivatives in the ODE system (which define the model). Defaults to \code{seira}.
+#' @importFrom tidyselect all_of
+#' @export
+multiEpochSird <- function(
+  n.rep = 10,
+  paramsList,
+  timesList,
+  interventionList,
+  init,
+  nThreads = 1,
+  func = sird,
+  modelOutput = if(is.list(init) & !is.data.frame(init)) names(init[[1]]) else names(init)
+) {
+  if (length(paramsList) != length(timesList) ||
+      length(timesList) != length(interventionList)) {
+    stop("Must specify the same number of epoches in `paramsList`, `timesList` and `interventionList`")
+  }
+
+  transformedTimesList <- transformEpochTimes(timesList)
+
+  compartmentNames <- names(init)
+
+  # First epoch
+  result <- sirdModel(n.rep, paramsList[[1]], init, transformedTimesList[[1]],
+                           interventionList[[1]], nThreads, func, model.output = modelOutput)
+
+  last <- result
+  if (length(paramsList) > 1) {
+    for (e in 2:length(paramsList)) {
+      df <- last$out %>% filter(.data$times == max(.data$times)) %>% arrange(replicate) %>% select(tidyselect::all_of(compartmentNames))
+      init <- split(df, seq(nrow(df)))
+      epoch <- sirdModel(n.rep, paramsList[[e]], init, transformedTimesList[[e]],
+                              interventionList[[e]], nThreads, func, model.output = modelOutput)
+      epoch$out$times <- epoch$out$times + min(timesList[[e]])
+      last <- epoch
+      result$out <- rbind(result$out, epoch$out[-1,])
+    }
+  }
+
+  return(result)
+}
+
+transformEpochTimes <- function(timesList) {
+
+  transformedTimeList <- list()
+  startTime <- 0
+  for (epoch in 1:length(timesList)) {
+    times <- timesList[[epoch]]
+    if (times[1] != startTime) {
+      stop("Must specify consecutive times in `timesList`")
+    }
+    startTime <- times[length(times)]
+    transformedTimeList[[epoch]] <- times - times[1]
+  }
+
+  return(transformedTimeList)
+}
+
+sirdModel <- function(
+  n.rep = 10,
+  params,
+  init,
+  times = seq(0, 365, by = 1),
+  intervention = c(1, 1, 1),
+  nThreads = 1,
+  func = sird,
+  model.output = if(is.list(init) & !is.data.frame(init)) names(init[[1]]) else names(init)
+)
+{
+  n.t <- length(times)
+  n.out <- n.t * n.rep
+  
+  # Set up output data frame -----------------------------------------------------
+  if (is.list(init)) {
+    template_init <- init[[1]]
+  } else {
+    template_init <- init
+  }
+
+  sirdOut <- data.frame(matrix(NA, ncol = 2 + length(model.output), nrow = n.out))
+
+  for(j in 1:n.rep) {
+    # Writing onto row [(j-1)*n.t+1] to row [j*n.t]:
+    sirdOut[((j-1)*n.t + (1:n.t)),] <- execute.sird(j, n.t, params,
+                                                        init, times, func)[, c("replicate", "time",   model.output)]
+  }
+
+  names(sirdOut) <- c("replicate", "times", model.output)
+
+  sirdOut$intervention <- attr(intervention, "label")
+
+  return(list(out = sirdOut))
+}
+
+execute.sird <- function(j, n.t, parameters, in_init, times, func) {
+
+  if (is.list(in_init)) {
+    init <- in_init[[j]]
+    names <- names(init)
+    init <- as.numeric(init)
+    names(init) <- names
+  } else {
+    init <- in_init
+  }
+
+  result <- cbind(
+    replicate = rep(j, n.t),
+    as.data.frame(deSolve::ode(y = init, times = times, func = func, parms = parameters))
+  )
+
+  return(result)
+}
+
+
+#' SEIR Model
+#'
+#' This function defines the system of ODEs for a SEIR model. For use with deSolve::ode.
+#'
+#' @param times The times at which to evaluate the solutions.
+#' @param state The current estimate of the variables in the ODE system.
+#' @param parameters A vector of parameters. Must include \code{beta}, \code{rho}, \code{L} and \code{gamma}.
+#' @export
+seir <- function(times, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    dS <- - beta * S * I
+    dE <-   beta * S * I - (E/L)
+    dI <-                  (E/L) - gamma * I
+    dR <-                          gamma * I
+    return(list(c(dS, dE, dI, dR)))
+  })
+}
+
+#' SIRD Model
+#'
+#' This function defines the system of ODEs for the SIRD model. For use with deSolve::ode.
+#'
+#' @param times The times at which to evaluate solutions.
+#' @param state The current estimate of the variables in the ODE system.
+#' @param parameters A vector of parameters. Must include parameters \code{t_s}, \code{a_s}, \code{b_s}, and \code{c_s}.
+#' @export
+sird <- function(times, state, parameters)
+{
+  with(as.list(c(state, parameters)), {
+    du <- exp( (1/b_s) * exp(b_s * (times + t_s) + a_s) + c_s) * exp(b_s * (times + t_s) + a_s)
+    dS <- - du
+    dI <-   du - gamma * I
+    dR <-   gamma * I
+        return(list(c(dS, dI, dR)))
+  })
+}
+
+
+
