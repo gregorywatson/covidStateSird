@@ -82,19 +82,20 @@ constErrLogNorm <- function(x, t, u, beta, alpha) {
 }
 
 #' @export
+#' @importFrom foreach %dopar% %:% 
 caseModelConstant <- function(velocityPosterior, intervention = 1) {
   if(intervention == 0) {
     beta = velocityPosterior$BUGSoutput$sims.list$b
     alpha = velocityPosterior$BUGSoutput$sims.list$a
   } else if(intervention == 1) {
-    beta = caseRiasFitMS$BUGSoutput$sims.list$b +
-           caseRiasFitMS$BUGSoutput$sims.list$d
-    alpha = caseRiasFitMS$BUGSoutput$sims.list$a +
-            caseRiasFitMS$BUGSoutput$sims.list$g
+    beta = velocityPosterior$BUGSoutput$sims.list$b +
+           velocityPosterior$BUGSoutput$sims.list$d
+    alpha = velocityPosterior$BUGSoutput$sims.list$a +
+            velocityPosterior$BUGSoutput$sims.list$g
   }
   
-  constants <- foreach(k = 1:nrow(velocityPosterior$BUGSoutput$sims.matrix), .combine = 'rbind') %:%
-     foreach(i = 1:velocLogCasesList$nLoc, .combine = 'c')  %dopar% {
+  constants <- foreach::foreach(k = 1:nrow(velocityPosterior$BUGSoutput$sims.matrix), .combine = 'rbind') %:%
+     foreach::foreach(i = 1:velocLogCasesList$nLoc, .combine = 'c') %dopar% {
        optim(6, constErrLogNorm, u = velocLogCases$u[(velocLogCases$loc == i) & (velocLogCases$postIntervention == intervention)],
             t = velocLogCases$t[(velocLogCases$loc == i) & (velocLogCases$postIntervention == intervention)],
          beta = beta[k,i],

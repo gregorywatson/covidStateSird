@@ -1,4 +1,5 @@
 #' @export
+#' @importFrom randomForest randomForest na.roughfix
 deathForest <- function(stateCovidData, stateList, covariates, lagDays, fileOut = NULL) {
   
   velocLogCases <- velocLogDeaths <- data.frame()
@@ -32,7 +33,9 @@ deathForest <- function(stateCovidData, stateList, covariates, lagDays, fileOut 
     deathModelData <- rbind(deathModelData, cbind(velocLogCases[velocLogCases$loc ==   i,][-(1:(maxLag1+1)),], dDeaths, laggedNewCases))
   }
   
-  randomForestDeathModel <- randomForest(dDeaths ~ ., data = deathModelData[,-(1:5)], na.action = na.roughfix, keep.forest=TRUE, keep.inbag=TRUE)
+  randomForestDeathModel <- randomForest::randomForest(dDeaths ~ .,
+    data = deathModelData[,-(1:5)], na.action = na.roughfix,
+    keep.forest=TRUE, keep.inbag=TRUE)
   
   if(!is.null(fileOut)) {
     save(randomForestDeathModel, deathModelData, file = fileOut)

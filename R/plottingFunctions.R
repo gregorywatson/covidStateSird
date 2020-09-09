@@ -1,7 +1,7 @@
 plotCols <- c("#AEC441", "#008875", "#0094D6", "#F2E000", "#C362A6", "#F78F1E")
 
 #' @export
-plotCumulativeCases <- function(allS, state, statePop, plotT, endPlot, plotCol = plotCols[2]) {
+plotCumulativeCases <- function(allS, state, days, statePop, plotT, endPlot, plotCol = plotCols[2]) {
     par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
   
     qC <- t(apply(statePop - allS, 1, quantile, probs = c(.05, .5,  .95),  na.rm =     TRUE))[1:length(plotT),]
@@ -62,6 +62,7 @@ plotActiveCases <- function(allI, state, plotT, endPlot, plotCol = plotCols[5]) 
   } else {
     axisTicks <- seq(0,500000,5)
   }
+      axisDays <- as.Date(c("2020-03-01", "2020-05-01", "2020-07-01",  "2020-09-01", "2020-11-01"))
     axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
    labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
 
@@ -71,7 +72,7 @@ plotActiveCases <- function(allI, state, plotT, endPlot, plotCol = plotCols[5]) 
 }
 
 #' @export
-plotDailyDeaths <- function(allD, allStateFit, stateFit, state, plotT, endPlot, SAMPS, rfError, plotCol = plotCols[6]) {
+plotDailyDeaths <- function(allD, allStateFit, stateFit, state, days, plotT, endPlot, SAMPS, rfError, plotCol = plotCols[6]) {
    par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
   
     allDD <- apply(allD, 2, diff)
@@ -108,13 +109,13 @@ plotDailyDeaths <- function(allD, allStateFit, stateFit, state, plotT, endPlot, 
   
     axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
     labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
-  
+      axisDays <- as.Date(c("2020-03-01", "2020-05-01", "2020-07-01",  "2020-09-01", "2020-11-01"))
     axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33",   col   = "grey33", cex.axis = 1.25)
   
      mtext("Daily Deaths", side=2, line=3.1, col="grey33", cex=1)
 }
 
-plotRt <- function(allRt, state, plotT, endPlot, plotCol = plotCols[1]) {
+plotRt <- function(allRt, state, days, plotT, endPlot, plotCol = plotCols[1]) {
   par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
  
    qRt <- t(apply(allRt, 1, quantile, probs = c(.05, .5,  .95),  na.rm = TRUE))[1:length(plotT),]
@@ -133,13 +134,14 @@ plotRt <- function(allRt, state, plotT, endPlot, plotCol = plotCols[1]) {
  
    mtext("Estimated Rt 10-day Moving Average", side=2, line=3.1, col="grey33", cex=1)
  
+     axisDays <- as.Date(c("2020-03-01", "2020-05-01", "2020-07-01",  "2020-09-01", "2020-11-01"))
    axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33",   col   = "grey33", cex.axis = 1.25)
  
-   mtext(stateAbbrev, outer=TRUE,  cex=2, line=-4)
+ #  mtext(stateAbbrev, outer=TRUE,  cex=2, line=-4)
 }
 
 #' @export
-plotVelocityFit <- function(posteriorMean, fileName = NULL) {
+plotVelocityFit <- function(posteriorMean, statesLong, states, stateInterventions, fileName = NULL) {
   if(!is.null(fileName)) {
     pdf(file = fileName, width = 6, height = 6)
   }
@@ -158,14 +160,14 @@ plotVelocityFit <- function(posteriorMean, fileName = NULL) {
   
       pop <-  stateInterventions$statePopulation[stateInterventions$stateAbbreviation ==   states[i]]
   
-      bb <- pm$a[i]
-      mm <- (pm$b[i])
+      bb <- posteriorMean$a[i]
+      mm <- posteriorMean$b[i]
       ii <- min(which(intv)[1], 200, na.rm = T)
   
       curve(exp(bb + mm * x), 0, ii,col ="#FB9FA4", add = T)
   
-      bb <- pm$a[i] + pm$g[i]
-      mm <- pm$b[i] + pm$d[i]
+      bb <- posteriorMean$a[i] + posteriorMean$g[i]
+      mm <- posteriorMean$b[i] + posteriorMean$d[i]
   
           curve(exp(bb+mm*x), ii, 1000, col = "#5D8AA8", add = T)
   

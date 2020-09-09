@@ -1,4 +1,6 @@
 #' @export
+#' @importFrom dplyr %>% lag group_by mutate
+#' @importFrom TTR runMean
 stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidData,
   randomForestDeathModel, posteriorSamples,
   rfError = FALSE, plots = TRUE, lagDays = 21, minCases = 100, endDay = endDate, endPlotDay = "2020-11-01") {
@@ -112,7 +114,7 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
   
     laggedNewCases <- NULL
      for(k in 1:lagDays) {
-       laggedNewCases <- cbind(laggedNewCases, lag(dCases,k-1)[-(1:(lagDays - 1))])
+       laggedNewCases <- cbind(laggedNewCases, dplyr::lag(dCases,k-1)[-(1:(lagDays - 1))])
      }
      colnames(laggedNewCases) <- paste0("dCase",1:lagDays)
   
@@ -178,9 +180,9 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
   
   nT <- length(stateFit$times)
   
-  allStateFit <- as.data.frame(allStateFit %>% group_by(replicate) %>% mutate(Rt = 10 * -c(diff(S), NA)   / I))
+  allStateFit <- as.data.frame(allStateFit %>% dplyr::group_by(replicate) %>% dplyr::mutate(Rt = 10 * -c(diff(S), NA)   / I))
   
-  allStateFit <- as.data.frame(allStateFit %>% group_by(replicate) %>% mutate(Rt10 = c(runMean(10 *   -diff(S) / I[1:(nT-1)])[5:(nT-1)], rep(NA,5))))
+  allStateFit <- as.data.frame(allStateFit %>% dplyr::group_by(replicate) %>% dplyr::mutate(Rt10 = c(TTR::runMean(10 *  -diff(S) / I[1:(nT-1)])[5:(nT-1)], rep(NA,5))))
   
   allRt <- matrix(allStateFit$Rt10, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
   
@@ -197,7 +199,7 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
              DailyDeathRate = 1e5 * diff(stateFit$D)[tRow-1]/ statePop)
   write.csv(rateTable, file = paste0(outputPath, "/Data/", stateAbbrev, "_rateTable.csv"))
   
-  save(allStateFit, stateFit, pTuned, file = paste0(outputPath, "/Data/", stateAbbrev, ".Rdata"))
+  save(allStateFit, stateFit, sirdParams, file = paste0(outputPath, "/Data/", stateAbbrev, ".Rdata"))
 
   if(plots) {
 
@@ -206,12 +208,13 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
     
     pdf(file = paste0(outputPath, "/Plots/",stateAbbrev,".pdf"), width = 24,   height = 6)
     par(mfrow = c(1,4))
-    
-    plotCumulativeCases(allS, state, statePop,  plotT, endPlot)
+   
+    plotCumulativeCases(allS, state, days, statePop,  plotT, endPlot)
     plotActiveCases(allI, state, plotT, endPlot)
-    plotDailyDeaths(allD, allStateFit, stateFit, state, plotT, endPlot, SAMPS, rfError, plotCol = plotCols[6])
-    plotRt(allRt, state, plotT, endPlot)
-
+    plotDailyDeaths(allD, allStateFit, stateFit, state, days, plotT, endPlot, SAMPS, rfError, plotCol = plotCols[6])
+    plotRt(allRt, state, days, plotT, endPlot)
+    mtext(stateAbbrev, outer=TRUE,  cex=2, line=-4)
+    
     dev.off()
   }
 }
