@@ -93,11 +93,8 @@ load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 # stateSird("CA", covariates, stateInterventions, stateCovidData, randomForestDeathModel,
 # posteriorSamples, rfError = T, plots = T)
 
-
 foreach(i = 1:length(states)) %dopar% {
   stateSird(states[i], covariates, stateInterventions, stateCovidData, randomForestDeathModel,
   posteriorSamples, rfError = T)
-
-
 }
 
