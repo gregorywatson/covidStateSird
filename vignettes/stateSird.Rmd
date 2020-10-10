@@ -62,9 +62,7 @@ for(i in 1:length(states)) {
 velocLogCasesList <- as.list(velocLogCases)
 velocLogCasesList$N <- nrow(velocLogCases)
 velocLogCasesList$nLoc <- length(unique(velocLogCasesList$loc))
-velocLogCasesList$p <- ncol(velocLogCases) - 3
 
-velocLogCasesList <- velocLogCasesList
 velocLogCasesList$y[velocLogCasesList$y <= 0] <- NA
 
 params <- c("mu_a", "mu_b", "sigma", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "alpha", "beta", "mu_alpha", "mu_beta")
