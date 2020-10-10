@@ -65,16 +65,16 @@ velocLogCasesList$N <- nrow(velocLogCases)
 velocLogCasesList$nLoc <- length(unique(velocLogCasesList$loc))
 velocLogCasesList$p <- ncol(velocLogCases) - 3
 
-velocLogCasesListMS <- velocLogCasesList
-velocLogCasesListMS$y[velocLogCasesList$y <= 0] <- NA
-velocLogCasesListMS$p <- 12
+velocLogCasesList <- velocLogCasesList
+velocLogCasesList$y[velocLogCasesList$y <= 0] <- NA
+velocLogCasesList$p <- 12
 
 params <- c("mu_a", "mu_b", "sigma", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "alpha", "beta", "mu_alpha", "mu_beta")
  
 start <- Sys.time()
 
-velocModel <- R2jags::jags(data = velocLogCasesListMS, inits = NULL, parameters.to.save = params,
-  model.file = riasJagsModel, n.chains = 3, n.iter = 200, n.burnin = 10, n.thin = 20, DIC = F)
+velocModel <- R2jags::jags(data = velocLogCasesList, inits = NULL, parameters.to.save = params,
+  model.file = riasJagsModel, n.chains = 3, n.iter = 100, n.burnin = 10, n.thin = 10, DIC = F)
 
 timeElapsed <- (Sys.time() - start)
 
@@ -101,12 +101,12 @@ randomForestDeathModel <- deathForest(stateCovidData, states, covariates, 21, fi
 
 load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 
-# stateSird("CA", covariates, stateInterventions, stateCovidData, randomForestDeathModel,
-# posteriorSamples, rfError = T, plots = T)
+stateSird("CA", covariates, stateInterventions, stateCovidData, randomForestDeathModel,
+posteriorSamples, rfError = T, plots = T)
 
-foreach(i = 1:length(states)) %dopar% {
-  stateSird(states[i], covariates, stateInterventions, stateCovidData, randomForestDeathModel,
-  posteriorSamples, rfError = T)
-}
+# foreach(i = 1:length(states)) %dopar% {
+#   stateSird(states[i], covariates, stateInterventions, stateCovidData, randomForestDeathModel,
+#   posteriorSamples, rfError = T)
+# }
 ```
 
