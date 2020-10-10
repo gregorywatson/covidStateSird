@@ -65,7 +65,7 @@ velocLogCasesList$nLoc <- length(unique(velocLogCasesList$loc))
 
 velocLogCasesList$y[velocLogCasesList$y <= 0] <- NA
 
-params <- c("mu_a", "mu_b", "sigma", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "alpha", "beta", "mu_alpha", "mu_beta")
+params <- c("mu_a", "mu_b", "tau", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "alpha", "beta", "mu_alpha", "mu_beta")
  
 start <- Sys.time()
 
