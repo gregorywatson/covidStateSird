@@ -57,7 +57,7 @@ for(i in 1:length(states)) {
   covariatesLoc <- covariates[covariates$location == states[i],]
   population <- stateInterventions$statePopulation[stateInterventions$stateAbbreviation == states[i]]
   
-  velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases,  loc, covariatesLoc[,-1], population, row.names = NULL))
+  velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases,  loc, row.names = NULL))
 }
 
 velocLogCasesList <- as.list(velocLogCases)
@@ -67,7 +67,6 @@ velocLogCasesList$p <- ncol(velocLogCases) - 3
 
 velocLogCasesList <- velocLogCasesList
 velocLogCasesList$y[velocLogCasesList$y <= 0] <- NA
-velocLogCasesList$p <- 12
 
 params <- c("mu_a", "mu_b", "sigma", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "alpha", "beta", "mu_alpha", "mu_beta")
  
