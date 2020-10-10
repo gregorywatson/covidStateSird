@@ -54,7 +54,6 @@ for(i in 1:length(states)) {
   loc <- loc + 1
 
   velocLoc <- velocitiesState(stateCovidData, states[i], stateInterventions, minCases = minCase, endDate = endDate)
-  covariatesLoc <- covariates[covariates$location == states[i],]
   population <- stateInterventions$statePopulation[stateInterventions$stateAbbreviation == states[i]]
   
   velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases,  loc, row.names = NULL))
