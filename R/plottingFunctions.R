@@ -115,6 +115,7 @@ plotDailyDeaths <- function(allD, allStateFit, stateFit, state, days, plotT, end
      mtext("Daily Deaths", side=2, line=3.1, col="grey33", cex=1)
 }
 
+#' @export
 plotRt <- function(allRt, state, days, plotT, endPlot, plotCol = plotCols[1]) {
   par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
  
