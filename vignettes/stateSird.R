@@ -43,27 +43,23 @@ for(i in 1:length(states)) {
   loc <- loc + 1
 
   velocLoc <- velocitiesState(stateCovidData, states[i], stateInterventions, minCases = minCase, endDate = endDate)
-  covariatesLoc <- covariates[covariates$location == states[i],]
   population <- stateInterventions$statePopulation[stateInterventions$stateAbbreviation == states[i]]
   
-  velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases,  loc, covariatesLoc[,-1], population, row.names = NULL))
+  velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases,  loc, row.names = NULL))
 }
 
 velocLogCasesList <- as.list(velocLogCases)
 velocLogCasesList$N <- nrow(velocLogCases)
 velocLogCasesList$nLoc <- length(unique(velocLogCasesList$loc))
-velocLogCasesList$p <- ncol(velocLogCases) - 3
 
-velocLogCasesListMS <- velocLogCasesList
-velocLogCasesListMS$y[velocLogCasesList$y <= 0] <- NA
-velocLogCasesListMS$p <- 12
+velocLogCasesList$y[velocLogCasesList$y <= 0] <- NA
 
-params <- c("mu_a", "mu_b", "sigma", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "alpha", "beta", "mu_alpha", "mu_beta")
+params <- c("mu_a", "mu_b", "tau", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "alpha", "beta", "mu_alpha", "mu_beta")
  
 start <- Sys.time()
 
-velocModel <- R2jags::jags(data = velocLogCasesListMS, inits = NULL, parameters.to.save = params,
-  model.file = riasJagsModel, n.chains = 3, n.iter = 200, n.burnin = 10, n.thin = 20, DIC = F)
+velocModel <- R2jags::jags(data = velocLogCasesList, inits = NULL, parameters.to.save = params,
+  model.file = riasJagsModel, n.chains = 3, n.iter = 100, n.burnin = 10, n.thin = 10, DIC = F)
 
 timeElapsed <- (Sys.time() - start)
 
@@ -93,8 +89,12 @@ load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 # stateSird("CA", covariates, stateInterventions, stateCovidData, randomForestDeathModel,
 # posteriorSamples, rfError = T, plots = T)
 
-foreach(i = 1:length(states)) %dopar% {
-  stateSird(states[i], covariates, stateInterventions, stateCovidData, randomForestDeathModel,
-  posteriorSamples, rfError = T)
-}
+# foreach(i = 1:length(states)) %dopar% {
+#   stateSird(states[i], covariates, stateInterventions, stateCovidData, randomForestDeathModel,
+#   posteriorSamples, rfError = T)
+# }
+ for(i in 1:length(states)) {
+   stateSird(states[i], covariates, stateInterventions, stateCovidData, randomForestDeathModel,
+   posteriorSamples, rfError = T)
+ }
 
