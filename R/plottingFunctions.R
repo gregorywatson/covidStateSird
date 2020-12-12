@@ -1,4 +1,4 @@
-plotCols <- c("#AEC441", "#008875", "#0094D6", "#F2E000", "#C362A6", "#F78F1E")
+plotCols <- c("#AEC441", "#008875", "#0094D6", "#F2E000", "#C362A6", "#F78F1E", "#2E62CC", "#FFC024")
 
 #' @export
 plotCumulativeCases <- function(allS, state, days, statePop, plotT, endPlot, plotCol = plotCols[2]) {
@@ -15,7 +15,9 @@ plotCumulativeCases <- function(allS, state, days, statePop, plotT, endPlot, plo
               points(days, state[1,], pch = 19, col = "grey33")
   
     # x-axis tick marks
-    if(max(qC) > 500000) {
+    if(max(qC) > 1000000) {
+      axisTicks <- seq(0,2000000,250000)
+    } else if(max(qC) > 500000) {
       axisTicks <- seq(0,2000000,100000)
     } else if(max(qC) > 100000) {
         axisTicks <- seq(0,500000,50000)
@@ -31,7 +33,7 @@ plotCumulativeCases <- function(allS, state, days, statePop, plotT, endPlot, plo
     axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
     labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
 
-    axisDays <- as.Date(c("2020-03-01", "2020-05-01", "2020-07-01",  "2020-09-01", "2020-11-01"))
+    axisDays <- as.Date(c("2020-03-01", "2020-06-01", "2020-09-01",  "2020-12-01", "2021-3-01"))
    axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33", col   = "grey33", cex.axis = 1.25)
 
      mtext("Cumulative Confirmed Cases", side=2, line=3.1, col="grey33", cex=1)
@@ -53,6 +55,8 @@ plotActiveCases <- function(allI, state, plotT, endPlot, plotCol = plotCols[5]) 
 
   if(max(qI) > 100000) {
     axisTicks <- seq(0,500000,25000)
+  } else if (max(qI) > 50000) {
+    axisTicks <- seq(0,500000,10000)
   } else if (max(qI) > 10000) {
     axisTicks <- seq(0,500000,5000)
   } else if (max(qI) > 1000) {
@@ -62,7 +66,7 @@ plotActiveCases <- function(allI, state, plotT, endPlot, plotCol = plotCols[5]) 
   } else {
     axisTicks <- seq(0,500000,5)
   }
-      axisDays <- as.Date(c("2020-03-01", "2020-05-01", "2020-07-01",  "2020-09-01", "2020-11-01"))
+    axisDays <- as.Date(c("2020-03-01", "2020-06-01", "2020-09-01",  "2020-12-01", "2021-3-01"))
     axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
    labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
 
@@ -109,7 +113,7 @@ plotDailyDeaths <- function(allD, allStateFit, stateFit, state, days, plotT, end
   
     axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
     labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
-      axisDays <- as.Date(c("2020-03-01", "2020-05-01", "2020-07-01",  "2020-09-01", "2020-11-01"))
+    axisDays <- as.Date(c("2020-03-01", "2020-06-01", "2020-09-01",  "2020-12-01", "2021-3-01"))
     axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33",   col   = "grey33", cex.axis = 1.25)
   
      mtext("Daily Deaths", side=2, line=3.1, col="grey33", cex=1)
@@ -135,7 +139,7 @@ plotRt <- function(allRt, state, days, plotT, endPlot, plotCol = plotCols[1]) {
  
    mtext("Estimated Rt 10-day Moving Average", side=2, line=3.1, col="grey33", cex=1)
  
-     axisDays <- as.Date(c("2020-03-01", "2020-05-01", "2020-07-01",  "2020-09-01", "2020-11-01"))
+    axisDays <- as.Date(c("2020-03-01", "2020-06-01", "2020-09-01",  "2020-12-01", "2021-3-01"))
    axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33",   col   = "grey33", cex.axis = 1.25)
  
  #  mtext(stateAbbrev, outer=TRUE,  cex=2, line=-4)
@@ -178,3 +182,77 @@ plotVelocityFit <- function(posteriorMean, statesLong, states, stateIntervention
   }
 }
 
+#' @export
+plotPropDeath <- function(allPropDead, plotT, endPlot, plotCol = plotCols[2]) {
+    par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
+  
+    qC <- t(apply(allPropDead, 1, quantile, probs = c(.05, .5,  .95),  na.rm = TRUE))[1:length(plotT),]
+    nomiss <- !is.na(rowSums(qC))
+    plot(plotT, qC[, 2], col = NA, ylim = c(0, max(qC[nomiss,3])), xaxs = "i", xaxt = "n",
+         yaxt = "n", ylab = "", xlab = "")
+  
+    polygon(c(plotT[nomiss], rev(plotT[nomiss])),
+              c(qC[nomiss,1], rev(qC[nomiss,3])), col = paste0(plotCol,"30"), border = NA)
+              lines(plotT[nomiss], qC[nomiss,2], col = plotCol, lwd = 2)
+             
+  
+      axisTicks <- seq(0,1,.02)
+
+    axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
+    labels = axisTicks, cex = .9, tick = F, hadj = .75)
+
+    axisDays <- as.Date(c("2020-03-01", "2020-06-01", "2020-09-01",  "2020-12-01", "2021-3-01"))
+   axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33", col   = "grey33", cex.axis = 1.25)
+
+     mtext("Proportion of Resolved Cases Ending in Death", side=2, line=3.1, col="grey33", cex=1)
+}
+
+#' @export
+plotDoubleTimeDeaths <- function(all2xDeaths, plotT, endPlot, plotCol = plotCols[2]) {
+    par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
+  
+    qC <- t(apply(all2xDeaths, 1, quantile, probs = c(.05, .5,  .95),  na.rm = TRUE))[1:length(plotT),]
+    nomiss <- !is.na(rowSums(qC))
+    plot(plotT, qC[, 2], col = NA, ylim = c(0, max(qC[nomiss,3])), xaxs = "i", xaxt = "n",
+         yaxt = "n", ylab = "", xlab = "")
+  
+    polygon(c(plotT[nomiss], rev(plotT[nomiss])),
+              c(qC[nomiss,1], rev(qC[nomiss,3])), col = paste0(plotCol,"30"), border = NA)
+              lines(plotT[nomiss], qC[nomiss,2], col = plotCol, lwd = 2)
+             
+  
+      axisTicks <- seq(0,max(qC, na.rm = T),100)
+
+    axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
+    labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
+
+    axisDays <- as.Date(c("2020-03-01", "2020-06-01", "2020-09-01",  "2020-12-01", "2021-3-01"))
+   axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33", col   = "grey33", cex.axis = 1.25)
+
+     mtext("Cumulative Death Double Time (Days)", side=2, line=3.1, col="grey33", cex=1)
+}
+
+#' @export
+plotDoubleTimeCases <- function(all2xCases, plotT, endPlot, plotCol = plotCols[2]) {
+    par(mai = c(.8,.8,1,.4), mgp = c(3,.75,0))
+  
+    qC <- t(apply(all2xCases, 1, quantile, probs = c(.05, .5,  .95),  na.rm = TRUE))[1:length(plotT),]
+    nomiss <- !is.na(rowSums(qC))
+    plot(plotT, qC[, 2], col = NA, ylim = c(0, max(qC[nomiss,3])), xaxs = "i", xaxt = "n",
+         yaxt = "n", ylab = "", xlab = "")
+  
+    polygon(c(plotT[nomiss], rev(plotT[nomiss])),
+              c(qC[nomiss,1], rev(qC[nomiss,3])), col = paste0(plotCol,"30"), border = NA)
+              lines(plotT[nomiss], qC[nomiss,2], col = plotCol, lwd = 2)
+             
+  
+      axisTicks <- seq(0,max(qC, na.rm = T),100)
+
+    axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
+    labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
+
+    axisDays <- as.Date(c("2020-03-01", "2020-06-01", "2020-09-01",  "2020-12-01", "2021-3-01"))
+   axis(1, at = axisDays, labels = gsub(" 0", " ", format(axisDays, "%B %d")), col.axis = "grey33", col   = "grey33", cex.axis = 1.25)
+
+     mtext("Cumulative Case Double Time (Days)", side=2, line=3.1, col="grey33", cex=1)
+}

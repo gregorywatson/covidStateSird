@@ -15,7 +15,7 @@ library(foreach)
 
 
 # the last day of data to use
-endDate <- "2020-08-30"
+endDate <- "2020-12-08"
 minCase <- 100
 
 set.seed(525600)
@@ -70,13 +70,14 @@ params <- c("mu_a", "mu_b", "tau", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "al
 start <- Sys.time()
 
 velocModel <- R2jags::jags(data = velocLogCasesList, inits = NULL, parameters.to.save = params,
-  model.file = riasJagsModel, n.chains = 3, n.iter = 100, n.burnin = 10, n.thin = 10, DIC = F)
+  model.file = riasJagsModel, n.chains = 3, n.iter = 200000, n.burnin = 10000, n.thin = 500, DIC = F)
 
 timeElapsed <- (Sys.time() - start)
 
 plotVelocityFit(velocModel$BUGSoutput$mean,
                 stateCovidData, states, stateInterventions,
                 fileName = paste0(outputPath, "/Plots/velocityModelFit.pdf"))
+
 
 c_S_pre <- caseModelConstant(velocModel, intervention = 0)
 c_S_post <- caseModelConstant(velocModel, intervention = 1)
@@ -98,7 +99,7 @@ randomForestDeathModel <- deathForest(stateCovidData, states, covariates, 21, fi
 load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 
 # stateSird("CA", covariates, stateInterventions, stateCovidData, randomForestDeathModel,
-# posteriorSamples, rfError = T, plots = T)
+# posteriorSamples, rfError = T, plots = T, endPlotDay = "2021-03-01")
 
 # foreach(i = 1:length(states)) %dopar% {
 #   stateSird(states[i], covariates, stateInterventions, stateCovidData, randomForestDeathModel,
@@ -106,7 +107,7 @@ load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 # }
  for(i in 1:length(states)) {
    stateSird(states[i], covariates, stateInterventions, stateCovidData, randomForestDeathModel,
-   posteriorSamples, rfError = T)
+   posteriorSamples, rfError = T, endPlotDay = "2021-03-01")
  }
 ```
 

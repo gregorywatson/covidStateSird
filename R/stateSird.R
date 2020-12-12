@@ -163,6 +163,29 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
       stateFit$deathLo <- c(deltaDeath[1:lagDays], rfLoCap)
       stateFit$deathUp <- c(deltaDeath[1:lagDays], rfUpCap)
     }
+    # ---
+    
+   
+    
+    stateFit$cases <- rowSums(stateFit[,c("I", "R", "D")])
+    stateFit$doubleTimeCases <- stateFit$doubleTimeDeaths <- NA
+                                         
+    k <- 1
+    l <- 1
+    for(i in 1:nrow(stateFit)) {
+      
+      while((stateFit$cases[k] < 2 * stateFit$cases[i]) & (k <= nrow(stateFit))) {
+        k <- k + 1
+      }
+      if((stateFit$cases[k] >= 2 * stateFit$cases[i]) & (k <= nrow(stateFit))) stateFit$doubleTimeCases[i] <- k
+      
+      while((stateFit$D[l] < 2 * stateFit$D[i]) & (l <= nrow(stateFit))) {
+        l <- l + 1
+      }
+      if((stateFit$D[l] >= 2 * stateFit$D[i]) & (l <= nrow(stateFit))) stateFit$doubleTimeDeaths[i] <- l
+      
+    }
+    # ---
     allStateFit <- rbind(allStateFit, stateFit)
   }
 
@@ -172,6 +195,11 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
   allR <- matrix(allStateFit$R, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
   allD <- matrix(allStateFit$D, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
   
+  all2xCases <- matrix(allStateFit$doubleTimeCases, nrow = length(stateFit$times), ncol =length(SAMPS), byrow = F)
+  all2xDeaths <- matrix(allStateFit$doubleTimeDeaths, nrow = length(stateFit$times), ncol =length(SAMPS), byrow = F)
+  allStateFit$propDead <- allStateFit$D / (allStateFit$D + allStateFit$R)
+  allPropDead <- matrix(allStateFit$propDead, nrow = length(stateFit$times), ncol =length(SAMPS), byrow = F)
+    
   medianS <- as.matrix(apply(allS, 1, quantile, probs = c(.5),  na.rm = TRUE), ncol = 1)
   medianI <- as.matrix(apply(allI, 1, quantile, probs = c(.5),  na.rm = TRUE), ncol = 1)
   medianR <- as.matrix(apply(allR, 1, quantile, probs = c(.5),  na.rm = TRUE), ncol = 1)
@@ -206,14 +234,18 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
     endPlot <- as.Date(endPlotDay)
     plotT <- stateFit$times[which(stateFit$times <= endPlot)]
     
-    pdf(file = paste0(outputPath, "/Plots/",stateAbbrev,".pdf"), width = 24,   height = 6)
-    par(mfrow = c(1,4))
+    pdf(file = paste0(outputPath, "/Plots/",stateAbbrev,".pdf"), width = 24,   height = 12)
+    par(mfrow = c(2,4))
    
     plotCumulativeCases(allS, state, days, statePop,  plotT, endPlot)
     plotActiveCases(allI, state, plotT, endPlot)
     plotDailyDeaths(allD, allStateFit, stateFit, state, days, plotT, endPlot, SAMPS, rfError, plotCol = plotCols[6])
     plotRt(allRt, state, days, plotT, endPlot)
     mtext(stateAbbrev, outer=TRUE,  cex=2, line=-4)
+    
+    plotDoubleTimeCases(allDTC, plotT, endPlot, plotCols[7])
+    plotDoubleTimeDeaths(all2xDeaths, plotT, endPlot, plotCols[8])
+    plotPropDeath(allPropDead, plotT, endPlot, plotCols[3])
     
     dev.off()
   }
