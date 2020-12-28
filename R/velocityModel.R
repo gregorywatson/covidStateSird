@@ -104,3 +104,20 @@ caseModelConstant <- function(velocityPosterior, intervention = 1) {
     }
   return(constants)
 }
+
+#' @export
+ar1JagsModel <- function() {
+  mu ~ dnorm(0, 0.1);
+  tau.pro ~ dgamma(0.001, 0.001);
+  sd.pro <- 1/sqrt(tau.pro);
+  phi ~ dunif(0, 1);
+
+  for(j in 1:M) {
+    u[firstObs[j]] <- log(y[firstObs[j]]);
+     
+    for(i in (firstObs[j]+1):(firstObs[j] + N[j] - 1)) {
+      u[i] <- mu + phi * log(y[i - 1]);
+      y[i] ~ dlnorm(u[i], tau.pro);
+    }
+  }
+}
