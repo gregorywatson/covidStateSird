@@ -15,7 +15,7 @@ library(foreach)
 
 
 # the last day of data to use
-endDate <- "2020-12-08"
+endDate <- "2020-12-25"
 minCase <- 100
 
 set.seed(525600)
