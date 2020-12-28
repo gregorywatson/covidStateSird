@@ -30,7 +30,8 @@ dir.create(file.path(outputPath, "/Tables/"))
 dir.create(file.path(outputPath, "/Plots/"))
 dir.create(file.path(outputPath, "/Data/"))
 
-stateInterventions <- read.csv(paste0(covidDir, "Data/StateInterventionDates.csv"),
+stateInterventions <- read.csv(paste0(covidDir,
+                               "Data/StateInterventionDates.csv"),
                                stringsAsFactors = FALSE,
                                header = TRUE)
 
@@ -38,7 +39,8 @@ stateDataCSV <- "https://raw.githubusercontent.com/COVID19Tracking/covid-public-
 
 stateCovidData <- read.csv(stateDataCSV)
 
-covariates <- read.csv(paste0(covidDir, "Data/COVID-19 Location Covariates - analyticStates.csv"))
+covariates <- read.csv(paste0(covidDir, 
+                       "Data/COVID-19 Location Covariates - analyticStates.csv"))
 covariates[, c("heartDisease", "lungCancer", "diabetes", "copd")] <-
   covariates[, c("heartDisease", "lungCancer", "diabetes", "copd")] / 100000
 
@@ -53,10 +55,12 @@ loc <- 0
 for(i in 1:length(states)) {
   loc <- loc + 1
 
-  velocLoc <- velocitiesState(stateCovidData, states[i], stateInterventions, minCases = minCase, endDate = endDate)
+  velocLoc <- velocitiesState(stateCovidData, states[i], stateInterventions, 
+                              minCases = minCase, endDate = endDate)
   population <- stateInterventions$statePopulation[stateInterventions$stateAbbreviation == states[i]]
   
-  velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases,  loc, row.names = NULL))
+  velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases, loc, 
+                         row.names = NULL))
 }
 
 velocLogCasesList <- as.list(velocLogCases)
@@ -65,12 +69,20 @@ velocLogCasesList$nLoc <- length(unique(velocLogCasesList$loc))
 
 velocLogCasesList$y[velocLogCasesList$y <= 0] <- NA
 
-params <- c("mu_a", "mu_b", "tau", "a", "b", "g", "d", "mu_g", "mu_d", "mu", "alpha", "beta", "mu_alpha", "mu_beta")
+params <- c("mu_a", "mu_b", "tau", "a", "b", "g", "d", "mu_g", "mu_d",
+            "mu", "alpha", "beta", "mu_alpha", "mu_beta")
  
 start <- Sys.time()
 
-velocModel <- R2jags::jags(data = velocLogCasesList, inits = NULL, parameters.to.save = params,
-  model.file = riasJagsModel, n.chains = 3, n.iter = 200000, n.burnin = 10000, n.thin = 500, DIC = F)
+velocModel <- R2jags::jags(data = velocLogCasesList, 
+                           inits = NULL, 
+                           parameters.to.save = params,
+                           model.file = riasJagsModel, 
+                           n.chains = 3, 
+                           n.iter = 200000, 
+                           n.burnin = 10000, 
+                           n.thin = 500, 
+                           DIC = F)
 
 timeElapsed <- (Sys.time() - start)
 
@@ -94,17 +106,29 @@ save(posteriorSamples,
   file = paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 
 # run state SIRD models
-randomForestDeathModel <- deathForest(stateCovidData, states, covariates, 21, fileOut = paste0(outputPath, "/randomForestDeathModel.Rdata"))
+randomForestDeathModel <- deathForest(stateCovidData, 
+                                      states, 
+                                      covariates, 
+                                      21, 
+                                      fileOut = paste0(outputPath, 
+                                        "/randomForestDeathModel.Rdata"))
 
 load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 
 # test on CA
-# stateSird("CA", covariates, stateInterventions, stateCovidData, randomForestDeathModel,
-# posteriorSamples, rfError = T, plots = T, endPlotDay = "2021-03-01")
+# stateSird("CA", covariates, stateInterventions, stateCovidData, 
+# randomForestDeathModel, posteriorSamples, rfError = T, plots = T, 
+# endPlotDay = "2021-03-01")
 
  for(i in 1:length(states)) {
-   stateSird(states[i], covariates, stateInterventions, stateCovidData, randomForestDeathModel,
-   posteriorSamples, rfError = T, endPlotDay = "2021-03-01")
+   stateSird(states[i], 
+             covariates, 
+             stateInterventions, 
+             stateCovidData, 
+             randomForestDeathModel,
+             posteriorSamples, 
+             rfError = T, 
+             endPlotDay = "2021-03-01")
  }
 ```
 
