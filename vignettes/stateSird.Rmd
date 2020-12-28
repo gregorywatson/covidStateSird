@@ -63,21 +63,35 @@ for(i in 1:length(states)) {
                          row.names = NULL))
 }
 
-velocLogCasesList <- as.list(velocLogCases)
-velocLogCasesList$N <- nrow(velocLogCases)
-velocLogCasesList$nLoc <- length(unique(velocLogCasesList$loc))
+# velocLogCasesList <- as.list(velocLogCases)
+# velocLogCasesList$N <- nrow(velocLogCases)
+# velocLogCasesList$nLoc <- length(unique(velocLogCasesList$loc))
 
-velocLogCasesList$y[velocLogCasesList$y <= 0] <- NA
+# velocLogCasesList$y[velocLogCasesList$y <= 0] <- NA
 
-params <- c("mu_a", "mu_b", "tau", "a", "b", "g", "d", "mu_g", "mu_d",
-            "mu", "alpha", "beta", "mu_alpha", "mu_beta")
+velocLogCases$y[velocLogCases$y <= 0] <- NA
+velocLogCases <- velocLogCases[complete.cases(velocLogCases),]
  
+ 
+locs <- unique(velocLogCases $loc)
+firstObs <- rep(NA, length(locs))
+for(i in 1:length(locs)) {
+  firstObs [i] <- min(which(velocLogCases$loc == locs[i]))
+}
+
+velocLogCasesList = list(y = velocLogCases$y, 
+                 N = table(velocLogCases$loc), 
+                 nLoc = length(locs), 
+                 firstObs = firstObs)
+
+params = c("tau", "u", "mu", "phi")
+
 start <- Sys.time()
 
 velocModel <- R2jags::jags(data = velocLogCasesList, 
                            inits = NULL, 
                            parameters.to.save = params,
-                           model.file = riasJagsModel, 
+                           model.file = ar1JagsModel, 
                            n.chains = 3, 
                            n.iter = 200000, 
                            n.burnin = 10000, 
@@ -86,21 +100,20 @@ velocModel <- R2jags::jags(data = velocLogCasesList,
 
 timeElapsed <- (Sys.time() - start)
 
-plotVelocityFit(velocModel$BUGSoutput$mean,
-                stateCovidData, states, stateInterventions,
-                fileName = paste0(outputPath, "/Plots/velocityModelFit.pdf"))
+# plotVelocityFit(velocModel$BUGSoutput$mean,
+#                stateCovidData, states, stateInterventions,
+#                fileName = paste0(outputPath, "/Plots/velocityModelFit.pdf"))
 
+# c_S_pre <- caseModelConstant(velocModel, intervention = 0)
+# c_S_post <- caseModelConstant(velocModel, intervention = 1)
 
-c_S_pre <- caseModelConstant(velocModel, intervention = 0)
-c_S_post <- caseModelConstant(velocModel, intervention = 1)
-
-rownames(c_S_pre) <- NULL
-rownames(c_S_post) <- NULL
+# rownames(c_S_pre) <- NULL
+# rownames(c_S_post) <- NULL
 
 posteriorSamples <- velocModel$BUGSoutput$sims.list
 
-posteriorSamples[["c_pre"]] <- c_S_pre
-posteriorSamples[["c_post"]] <- c_S_post
+# posteriorSamples[["c_pre"]] <- c_S_pre
+# posteriorSamples[["c_post"]] <- c_S_post
 
 save(posteriorSamples,
   file = paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
@@ -111,7 +124,7 @@ randomForestDeathModel <- deathForest(stateCovidData,
                                       covariates, 
                                       21, 
                                       fileOut = paste0(outputPath, 
-                                        "/randomForestDeathModel.Rdata"))
+                                      "/randomForestDeathModel.Rdata"))
 
 load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 
