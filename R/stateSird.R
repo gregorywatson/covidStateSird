@@ -1,14 +1,33 @@
 #' @export
 #' @importFrom dplyr %>% lag group_by mutate
 #' @importFrom TTR runMean
-stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidData,
-  randomForestDeathModel, posteriorSamples,
-  rfError = FALSE, plots = TRUE, lagDays = 21, minCases = 100, endDay = endDate, endPlotDay = "2020-11-01") {
+stateSird <- function(stateAbbrev,
+                      states,
+                      covariates,
+                      stateInterventions,
+                      velocLogCases,
+                      stateCovidData,
+                      randomForestDeathModel,
+                      posteriorSamples,
+                      rfError = FALSE,
+                      plots = TRUE,
+                      makeRateTable = FALSE, 
+                      n.t = 30,
+                      lagDays = 21,
+                      minCases = 100,
+                      endDay = endDate,
+                      endPlotDay = "2021-03-01") {
 
   statePop = stateInterventions$statePopulation[which(stateInterventions$stateAbbreviation == stateAbbrev)]
 
   stIndx <- which(states == stateAbbrev)
 
+  nState <- sum(velocLogCases$loc == stIndx)
+  u <- velocLogCases$u[which(velocLogCases$loc == stIndx)]
+  y <- velocLogCases$y[which(velocLogCases$loc == stIndx)]
+  
+  n.day <- length(u)
+  
   stateLong <- stateCovidData[which(stateCovidData$state == stateAbbrev),]
 
   n.day <- nrow(stateLong)
@@ -44,34 +63,16 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
 
   lastObs <- ncol(state)
 
-  n.t <- 201
-  N.POST <- nrow(posteriorSamples$a)
+  #n.t <- 201
+  N.POST <- nrow(posteriorSamples$u)
   allStateFit <- NULL
 
-#  SAMPS <- sample(N.POST, 400) #1:N.POST
   SAMPS <- 1:N.POST
   for(M in SAMPS) {
 
-    if(stateInterventions$interventionDate[which(stateInterventions$stateAbbreviation == stateAbbrev)]   == "") {
-      a <- posteriorSamples$a[M, stIndx]
-      b <- posteriorSamples$b[M, stIndx]
-      c <- posteriorSamples$c_pre[M, stIndx]
-    } else {
-      a <- posteriorSamples$a[M, stIndx] + posteriorSamples$g[M, stIndx]
-      b <- posteriorSamples$b[M, stIndx] + posteriorSamples$d[M, stIndx]
-      c <- posteriorSamples$c_post[M, stIndx]
-    }
     nDay <-  length(days)
   
-    sirdParams <- c(
-      scale = 1,
-      t_s   = nDay,
-      b_s   = b,
-      a_s   = a,
-      c_s   = c, 
-      gamma = 1 / rnorm(1, 10, 1)
-    )
-  
+    gamm <- 1 / rnorm(1, 10, 1)
     init0 <- matrix(c(S = statePop - stateAll[1,startDayIndx],
                        I = stateAll[1,startDayIndx] - (R0 + D0) ,
                        R = R0 + D0), nrow = 1)
@@ -84,31 +85,35 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
   
     for(i in 2:nDay) {
       steps[i, 2] <- statePop - state[1, i]
-      steps[i, 4] <- steps[i-1, 4] + steps[i-1, 3] * sirdParams[["gamma"]]
+      steps[i, 4] <- steps[i-1, 4] + steps[i-1, 3] * gamm
       steps[i, 3] <- state[1, i] - steps[i, 4]
     }
     colnames(steps) <- c("times", "S", "I", "R")
   
-    init <- as.matrix(steps[nDay, 2:4, drop = F], nrow = 1)
-    colnames(init) <- c("S", "I", "R")
-  
-    stateFit <- try(multiEpochSird(n.rep = 1,
-                            params = list(sirdParams),
-                            init = init[1,],
-                            times = list(c(0:(n.t-1))),
-                            intervention = list(c(1,1,1)),
-                            func = sird,
-                            modelOutput = c("S", "I", "R"))$out)
-    if(inherits(stateFit, "try-error"))
-    {
-      # skip this iteration if there's an error (occasionally the ode solver doesn't converge)
-      next
-    }
+   # init <- as.matrix(steps[nDay, 2:4, drop = F], nrow = 1)
+   #  colnames(init) <- c("S", "I", "R")
+    init <- as.numeric(steps[nDay, 2:4, drop = F])
+    names(init) <- c("S", "I", "R")
+    sirdParams <- list(
+      phi = posteriorSamples$phi[M, stIndx],
+      mu  = posteriorSamples$mu[M, stIndx],
+      gamm = gamm,
+      S0 = init[["S"]],
+      Sminus1 = statePop - u[nState - 1],
+      dSminus1 = -y[nState - 1] * u[nState - 1] * (statePop - u[nState - 1]) / init[["S"]],
+      pop = statePop,
+      tau = posteriorSamples$tau[M])
+     
+     stateFit <- data.frame(deSolve::dede(y = init, times = 0:(n.t-1), SIR, parms = sirdParams))
+     # skip iteration if solution explodes
+     if(sum(is.nan(stateFit$S))) next
+     names(stateFit)[names(stateFit) == "time"] <- "times"
   
     stateFit$times <- days[nDay] + stateFit$times
   
-    stateFit <- rbind(cbind(replicate = 1, steps[1:(nDay-1),]),  stateFit)
-  
+  #  stateFit <- rbind(cbind(replicate = 1, steps[1:(nDay-1),]),  stateFit)
+    stateFit <- cbind(replicate = 1, rbind(steps[1:(nDay-1),],  stateFit))
+    
     # Estimate Deaths ---
     dCases  <- diff(statePop - stateFit$S)
   
@@ -120,7 +125,8 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
   
     x0 <- cbind(covariates[covariates$location == stateAbbrev,-1],
                 loc = which(states == stateAbbrev),
-                population = stateInterventions$statePopulation[stateInterventions$stateAbbreviation ==   stateAbbrev],
+                population = stateInterventions$statePopulation[
+                  stateInterventions$stateAbbreviation == stateAbbrev],
                 laggedNewCases, row.names = NULL)
   
     if(rfError == TRUE) {
@@ -165,7 +171,6 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
     }
     # ---
     
-   
     
     stateFit$cases <- rowSums(stateFit[,c("I", "R", "D")])
     stateFit$doubleTimeCases <- stateFit$doubleTimeDeaths <- NA
@@ -177,73 +182,98 @@ stateSird <- function(stateAbbrev, covariates, stateInterventions, stateCovidDat
       while((stateFit$cases[k] < 2 * stateFit$cases[i]) & (k <= nrow(stateFit))) {
         k <- k + 1
       }
-      if((stateFit$cases[k] >= 2 * stateFit$cases[i]) & (k <= nrow(stateFit))) stateFit$doubleTimeCases[i] <- k
+      if((stateFit$cases[k] >= 2 * stateFit$cases[i]) & (k <= nrow(stateFit)))
+        stateFit$doubleTimeCases[i] <- k
       
       while((stateFit$D[l] < 2 * stateFit$D[i]) & (l <= nrow(stateFit))) {
         l <- l + 1
       }
-      if((stateFit$D[l] >= 2 * stateFit$D[i]) & (l <= nrow(stateFit))) stateFit$doubleTimeDeaths[i] <- l
-      
+      if((stateFit$D[l] >= 2 * stateFit$D[i]) & (l <= nrow(stateFit)))
+        stateFit$doubleTimeDeaths[i] <- l
+
     }
     # ---
     allStateFit <- rbind(allStateFit, stateFit)
   }
 
+  nSampCompleted <- length(unique(allStateFit$replicate))
+  nT <- nrow(steps) + n.t - 1
 
-  allS <- matrix(allStateFit$S, nrow = length(stateFit$times), ncol =length(SAMPS), byrow = F)
-  allI <- matrix(allStateFit$I, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
-  allR <- matrix(allStateFit$R, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
-  allD <- matrix(allStateFit$D, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
+  allS <- matrix(allStateFit$S, nrow = nT,
+                 ncol = nSampCompleted, byrow = F)
+  allI <- matrix(allStateFit$I, nrow =  nT,
+                 ncol = nSampCompleted, byrow = F)
+  allR <- matrix(allStateFit$R, nrow =  nT,
+                 ncol = nSampCompleted, byrow = F)
+  allD <- matrix(allStateFit$D, nrow =  nT,
+                 ncol = nSampCompleted, byrow = F)
   
-  all2xCases <- matrix(allStateFit$doubleTimeCases, nrow = length(stateFit$times), ncol =length(SAMPS), byrow = F)
-  all2xDeaths <- matrix(allStateFit$doubleTimeDeaths, nrow = length(stateFit$times), ncol =length(SAMPS), byrow = F)
+  all2xCases <- matrix(allStateFit$doubleTimeCases, nrow =  nT,
+                       ncol = nSampCompleted, byrow = F)
+  all2xDeaths <- matrix(allStateFit$doubleTimeDeaths, nrow =  nT,
+                        ncol = nSampCompleted, byrow = F)
   allStateFit$propDead <- allStateFit$D / (allStateFit$D + allStateFit$R)
-  allPropDead <- matrix(allStateFit$propDead, nrow = length(stateFit$times), ncol =length(SAMPS), byrow = F)
+  allPropDead <- matrix(allStateFit$propDead, nrow =  nT,
+                        ncol = nSampCompleted, byrow = F)
     
-  medianS <- as.matrix(apply(allS, 1, quantile, probs = c(.5),  na.rm = TRUE), ncol = 1)
-  medianI <- as.matrix(apply(allI, 1, quantile, probs = c(.5),  na.rm = TRUE), ncol = 1)
-  medianR <- as.matrix(apply(allR, 1, quantile, probs = c(.5),  na.rm = TRUE), ncol = 1)
-  medianD <- as.matrix(apply(allD, 1, quantile, probs = c(.5),  na.rm = TRUE), ncol = 1)
+  medianS <- as.matrix(apply(allS, 1, quantile, probs = c(.5),  na.rm = TRUE),
+                       ncol = 1)
+  medianI <- as.matrix(apply(allI, 1, quantile, probs = c(.5),  na.rm = TRUE),
+                       ncol = 1)
+  medianR <- as.matrix(apply(allR, 1, quantile, probs = c(.5),  na.rm = TRUE),
+                       ncol = 1)
+  medianD <- as.matrix(apply(allD, 1, quantile, probs = c(.5),  na.rm = TRUE),
+                       ncol = 1)
   
+ # nT <- length(stateFit$times)
   
-  nT <- length(stateFit$times)
+  allStateFit <- as.data.frame(allStateFit %>% dplyr::group_by(replicate) %>%
+                 dplyr::mutate(Rt = 10 * -c(diff(S), NA)   / I))
   
-  allStateFit <- as.data.frame(allStateFit %>% dplyr::group_by(replicate) %>% dplyr::mutate(Rt = 10 * -c(diff(S), NA)   / I))
+  allStateFit <- as.data.frame(allStateFit %>% dplyr::group_by(replicate) %>%
+                 dplyr::mutate(Rt10 = c(TTR::runMean(10 *
+                 - diff(S) / I[1:(nT-1)])[5:(nT-1)], rep(NA,5))))
   
-  allStateFit <- as.data.frame(allStateFit %>% dplyr::group_by(replicate) %>% dplyr::mutate(Rt10 = c(TTR::runMean(10 *  -diff(S) / I[1:(nT-1)])[5:(nT-1)], rep(NA,5))))
+  allRt <- matrix(allStateFit$Rt10, nrow = nT,
+                  ncol = nSampCompleted, byrow = F)
   
-  allRt <- matrix(allStateFit$Rt10, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
-  
-  stateFit <- data.frame(cbind(stateFit$times, medianS, medianI, medianR, medianD))
+  stateFit <- data.frame(cbind(c(steps[1:(nDay-1),1], days[nDay] + 0:(n.t-1)), medianS, medianI, medianR,
+                               medianD))
   names(stateFit) <- c("times", "S", "I", "R", "D")
   stateFit[,1] <- as.Date(stateFit$times, origin = "1970-01-01")
   
-  tableDays <- c(as.Date(endDate), as.Date(c("2020-10-01", "2020-11-01")))
+  tableDays <- c(as.Date(endDate), as.Date(c("2021-02-01", "2021-03-01")))
   
   tRow <- which(stateFit$times %in% tableDays)
-  
-  rateTable <- data.frame(Day = c(as.Date(endDate), as.Date(c("2020-10-01", "2020-11-01"))),
-             ActiveInfectionRate = 1e5 * (stateFit$I[tRow])/ statePop,
-             DailyDeathRate = 1e5 * diff(stateFit$D)[tRow-1]/ statePop)
-  write.csv(rateTable, file = paste0(outputPath, "/Data/", stateAbbrev, "_rateTable.csv"))
-  
-  save(allStateFit, stateFit, sirdParams, file = paste0(outputPath, "/Data/", stateAbbrev, ".Rdata"))
+
+  if(makeRateTable) {
+    rateTable <- data.frame(Day = c(as.Date(endDate),
+                                    as.Date(c("2021-02-01", "2021-03-01"))),
+               ActiveInfectionRate = 1e5 * (stateFit$I[tRow])/ statePop,
+               DailyDeathRate = 1e5 * diff(stateFit$D)[tRow-1]/ statePop)
+    write.csv(rateTable, file = paste0(outputPath, "/Data/", stateAbbrev,
+                                       "_rateTable.csv"))
+  }
+  save(allStateFit, stateFit, sirdParams, file = paste0(outputPath, "/Data/",
+       stateAbbrev, ".Rdata"))
 
   if(plots) {
 
     endPlot <- as.Date(endPlotDay)
     plotT <- stateFit$times[which(stateFit$times <= endPlot)]
-    
-    pdf(file = paste0(outputPath, "/Plots/",stateAbbrev,".pdf"), width = 24,   height = 12)
+
+    pdf(file = paste0(outputPath, "/Plots/",stateAbbrev,".pdf"),
+        width = 24, height = 12)
     par(mfrow = c(2,4))
    
     plotCumulativeCases(allS, state, days, statePop,  plotT, endPlot)
     plotActiveCases(allI, state, plotT, endPlot)
-    plotDailyDeaths(allD, allStateFit, stateFit, state, days, plotT, endPlot, SAMPS, rfError, plotCol = plotCols[6])
+    plotDailyDeaths(allD, allStateFit, stateFit, state, days, plotT, endPlot,
+                    SAMPS, rfError, plotCol = plotCols[6])
     plotRt(allRt, state, days, plotT, endPlot)
     mtext(stateAbbrev, outer=TRUE,  cex=2, line=-4)
     
-    plotDoubleTimeCases(allDTC, plotT, endPlot, plotCols[7])
+    plotDoubleTimeCases(all2xCases, plotT, endPlot, plotCols[7])
     plotDoubleTimeDeaths(all2xDeaths, plotT, endPlot, plotCols[8])
     plotPropDeath(allPropDead, plotT, endPlot, plotCols[3])
     
@@ -414,4 +444,25 @@ sird <- function(times, state, parameters)
 }
 
 
-
+#' @export
+#' @importFrom deSolve lagvalue lagderiv
+SIR <- function(time, state, parameters){
+with(as.list(c(state,parameters)),{
+  if(time < 2) {
+    lagS <- Sminus1
+    lagdS <- dSminus1
+  }
+  else {
+    lagS  <- deSolve::lagvalue(time - 1, 1)
+    lagdS <- deSolve::lagderiv(time - 1, 1)
+  }
+  
+  u <- pop - S
+  lag_u <- pop - lagS
+  lagdu <- -lagdS * (S0/S)
+   
+  dS <- - ((lagdu / lag_u) ^ phi) * u * exp(mu + 1 / (2 * tau)) * (S/S0)
+  dI <-   ((lagdu / lag_u) ^ phi) * u * exp(mu + 1 / (2 * tau)) * (S/S0)  - gamm * I
+  dR <-                                                                     gamm * I
+  return(list(c(dS,dI,dR)))})
+}
