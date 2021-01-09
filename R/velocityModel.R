@@ -107,15 +107,17 @@ caseModelConstant <- function(velocityPosterior, intervention = 1) {
 
 #' @export
 ar1JagsModel <- function() {
-  mu_mu ~ dnorm(0, 1)
+  mu_mu ~ dnorm(0, .1)
   mu_phi ~ dunif(0, 1)
   mu_tau ~ dgamma(0.001, 0.001)
   sig2_phi <- .05
   sig2_tau <- 1
   for(j in 1:nLoc) {
-    mu[j]  ~ dnorm(mu_mu, .1)
+    logmu[j] ~ dnorm(mu_mu, .01)
+    mu[j] <- -exp(logmu[j])
+    # truncate the beta to avoid numerical instability in the slice sampler near 0 and 1
     phi[j] ~ dbeta(((1 - mu_phi)/(sig2_phi) - (1/mu_phi)) * mu_phi^2,
-    (((1 - mu_phi)/(sig2_phi) - (1/mu_phi)) * mu_phi^2) * ((1/mu_phi) - 1))
+                   (((1 - mu_phi)/(sig2_phi) - (1/mu_phi)) * mu_phi^2) * ((1/mu_phi) - 1));T(.001,.999)
     tau[j] ~ dgamma(mu_tau^2 / sig2_tau, mu_tau / sig2_tau)
     sd[j] <- 1 / sqrt(tau[j])
   }
