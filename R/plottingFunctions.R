@@ -15,7 +15,13 @@ plotCumulativeCases <- function(allS, state, days, statePop, plotT, endPlot, plo
               points(days, state[1,], pch = 19, col = "grey33")
   
     # x-axis tick marks
-    if(max(qC) > 1000000) {
+    if(max(qC) > 4000000) {
+      axisTicks <- seq(0,10000000,1000000)
+    }
+    else if(max(qC) > 2000000) {
+      axisTicks <- seq(0,5000000,500000)
+    }
+    else if(max(qC) > 1000000) {
       axisTicks <- seq(0,2000000,250000)
     } else if(max(qC) > 500000) {
       axisTicks <- seq(0,2000000,100000)
@@ -53,19 +59,28 @@ plotActiveCases <- function(allI, state, plotT, endPlot, plotCol = plotCols[5]) 
   c(qI[,1], rev(qI[,3])), col = paste0(plotCol,"30"), border = NA)
   lines(plotT, qI[,2], col = plotCol, lwd = 2)
 
-  if(max(qI) > 100000) {
-    axisTicks <- seq(0,500000,25000)
-  } else if (max(qI) > 50000) {
-    axisTicks <- seq(0,500000,10000)
-  } else if (max(qI) > 10000) {
-    axisTicks <- seq(0,500000,5000)
-  } else if (max(qI) > 1000) {
-    axisTicks <- seq(0,500000,500)
-  } else if (max(qI) > 100) {
-    axisTicks <- seq(0,500000,50)
-  } else {
-    axisTicks <- seq(0,500000,5)
-  }
+  # x-axis tick marks
+  if(max(qI) > 4000000) {
+     axisTicks <- seq(0,10000000,1000000)
+   }
+   else if(max(qI) > 2000000) {
+     axisTicks <- seq(0,5000000,500000)
+   }
+   else if(max(qI) > 1000000) {
+     axisTicks <- seq(0,2000000,250000)
+   } else if(max(qI) > 500000) {
+     axisTicks <- seq(0,2000000,100000)
+   } else if(max(qI) > 100000) {
+       axisTicks <- seq(0,500000,50000)
+   } else if (max(qI) > 10000) {
+     axisTicks <- seq(0,500000,5000)
+   } else if (max(qI) > 1000) {
+     axisTicks <- seq(0,500000,500)
+   } else if (max(qI) > 100) {
+     axisTicks <- seq(0,500000,50)
+   } else {
+     axisTicks <- seq(0,500000,5)
+   }
     axisDays <- as.Date(c("2020-03-01", "2020-06-01", "2020-09-01",  "2020-12-01", "2021-3-01"))
     axis(2, at = axisTicks, col = "grey33", las = 2, col.axis = "grey33",
    labels = formatC(axisTicks, format = "d", big.mark = ","), cex = .9, tick = F, hadj = .75)
