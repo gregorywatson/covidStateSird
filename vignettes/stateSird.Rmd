@@ -12,12 +12,14 @@ vignette: >
 ```{r load_libraries}
 library(covidStateSird)
 library(foreach)
+library(doParallel)
 
 
-# the last day of data to use
-endDate <- "2020-12-25"
+# set final day of training data -----------------------------------------------
+endDate <- "2020-12-31"
 minCase <- 100
 
+# set RNG seed -----------------------------------------------------------------
 set.seed(525600)
 
 covidDir <- "../"
@@ -39,10 +41,14 @@ stateDataCSV <- "https://raw.githubusercontent.com/COVID19Tracking/covid-public-
 
 stateCovidData <- read.csv(stateDataCSV)
 
+# covariates for death model ---------------------------------------------------
 covariates <- read.csv(paste0(covidDir, 
                        "Data/COVID-19 Location Covariates - analyticStates.csv"))
 covariates[, c("heartDisease", "lungCancer", "diabetes", "copd")] <-
   covariates[, c("heartDisease", "lungCancer", "diabetes", "copd")] / 100000
+
+# Exclude stroke, because it is missing for 5 states 
+covariates <- covariates[, -which(names(covariates) == "stroke")]
 
 states <- c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DE", "FL", "GA", 
             "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", 
@@ -62,12 +68,6 @@ for(i in 1:length(states)) {
   velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases, loc, 
                          row.names = NULL))
 }
-
-# velocLogCasesList <- as.list(velocLogCases)
-# velocLogCasesList$N <- nrow(velocLogCases)
-# velocLogCasesList$nLoc <- length(unique(velocLogCasesList$loc))
-
-# velocLogCasesList$y[velocLogCasesList$y <= 0] <- NA
 
 velocLogCases$y[velocLogCases$y <= 0] <- NA
 velocLogCases <- velocLogCases[complete.cases(velocLogCases),]
@@ -104,21 +104,14 @@ timeElapsed <- (Sys.time() - start)
 #                stateCovidData, states, stateInterventions,
 #                fileName = paste0(outputPath, "/Plots/velocityModelFit.pdf"))
 
-# c_S_pre <- caseModelConstant(velocModel, intervention = 0)
-# c_S_post <- caseModelConstant(velocModel, intervention = 1)
-
-# rownames(c_S_pre) <- NULL
-# rownames(c_S_post) <- NULL
 
 posteriorSamples <- velocModel$BUGSoutput$sims.list
-
-# posteriorSamples[["c_pre"]] <- c_S_pre
-# posteriorSamples[["c_post"]] <- c_S_post
 
 save(posteriorSamples,
   file = paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 
-# run state SIRD models
+
+# train death model ------------------------------------------------------------
 randomForestDeathModel <- deathForest(stateCovidData, 
                                       states, 
                                       covariates, 
@@ -133,15 +126,22 @@ load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 # randomForestDeathModel, posteriorSamples, rfError = T, plots = T, 
 # endPlotDay = "2021-03-01")
 
- for(i in 1:length(states)) {
-   stateSird(states[i], 
-             covariates, 
-             stateInterventions, 
-             stateCovidData, 
-             randomForestDeathModel,
-             posteriorSamples, 
-             rfError = T, 
-             endPlotDay = "2021-03-01")
- }
+# run state SIRD models --------------------------------------------------------
+foreach(i = 1:length(states)) %dopar% {
+  stateSird(states[i],
+            states,
+            covariates,
+            stateInterventions,
+            velocLogCases,
+            stateCovidData,
+            randomForestDeathModel,
+            posteriorSamples,
+            rfError = FALSE,
+            plots = TRUE,
+            lagDays = 21,
+            minCases = 100,
+            endDay = endDate,
+            endPlotDay = "2021-03-01")
+}
 ```
 
