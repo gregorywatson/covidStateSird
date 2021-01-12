@@ -21,20 +21,23 @@ deathForest <- function(stateCovidData, stateList, covariates, lagDays, fileOut 
   maxLag1 <- lagDays - 1
   deathModelData <- NULL
   for(i in unique(velocLogCases$loc)) {
-    dDeaths <- diff(velocLogCases$deaths[velocLogCases$loc == i])[-(1:maxLag1)]
+    dDeaths <- diff(velocLogCases$deaths[velocLogCases$loc == i]) #[-(1:maxLag1)]
     dCases  <- diff(velocLogCases$u[velocLogCases$loc == i])
     
     laggedNewCases <- NULL
+    laggedNewDeaths <- NULL
     for(k in 1:lagDays) {
       laggedNewCases <- cbind(laggedNewCases, lag(dCases,k-1)[-(1:maxLag1)])
+      laggedNewDeaths <- cbind(laggedNewDeaths, lag(dDeaths,k-1)[-(1:maxLag1)])
     }
     colnames(laggedNewCases) <- paste0("dCase",1:lagDays)
-
-    deathModelData <- rbind(deathModelData, cbind(velocLogCases[velocLogCases$loc ==   i,][-(1:(maxLag1+1)),], dDeaths, laggedNewCases))
+    colnames(laggedNewDeaths) <- paste0("dDeaths",1:lagDays)
+    
+    deathModelData <- rbind(deathModelData, cbind(velocLogCases[velocLogCases$loc ==   i,][-(1:(maxLag1+1)),], dDeaths = dDeaths[-(1:maxLag1)], laggedNewCases, laggedNewDeaths))
   }
   
   randomForestDeathModel <- randomForest::randomForest(dDeaths ~ .,
-    data = deathModelData[,-(1:5)], na.action = na.roughfix,
+    data = deathModelData[,-c(1,3:5)], na.action = na.roughfix,
     keep.forest=TRUE, keep.inbag=TRUE)
   
   if(!is.null(fileOut)) {
@@ -43,6 +46,7 @@ deathForest <- function(stateCovidData, stateList, covariates, lagDays, fileOut 
   return(randomForestDeathModel)
   
 }
+
 
 # from https://github.com/haozhestat/RFIntervals
 # modified so doesn't retrain random forest

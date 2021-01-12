@@ -64,7 +64,7 @@ stateSird <- function(stateAbbrev,
   lastObs <- ncol(state)
 
   #n.t <- 201
-  N.POST <- nrow(posteriorSamples$u)
+  N.POST <- max(1, nrow(posteriorSamples$u))
   allStateFit <- NULL
 
   SAMPS <- 1:N.POST
@@ -112,63 +112,69 @@ stateSird <- function(stateAbbrev,
     stateFit$times <- days[nDay] + stateFit$times
   
   #  stateFit <- rbind(cbind(replicate = 1, steps[1:(nDay-1),]),  stateFit)
-    stateFit <- cbind(replicate = 1, rbind(steps[1:(nDay-1),],  stateFit))
+    stateFit <- cbind(replicate = M, rbind(steps[1:(nDay-1),],  stateFit))
     
     # Estimate Deaths ---
+    
+    stateFit$D <- stateFit$deathPred <- stateFit$deathLo <- stateFit$deathUp <- NA
+    stateFit$D[1:nDay] <-
+      stateFit$deathPred[1:nDay]<-
+      stateFit$deathLo[1:nDay] <-
+      stateFit$deathUp[1:nDay] <- state[2,]
+  
+
     dCases  <- diff(statePop - stateFit$S)
-  
+
     laggedNewCases <- NULL
-     for(k in 1:lagDays) {
-       laggedNewCases <- cbind(laggedNewCases, dplyr::lag(dCases,k-1)[-(1:(lagDays - 1))])
-     }
-     colnames(laggedNewCases) <- paste0("dCase",1:lagDays)
-  
-    x0 <- cbind(covariates[covariates$location == stateAbbrev,-1],
-                loc = which(states == stateAbbrev),
-                population = stateInterventions$statePopulation[
-                  stateInterventions$stateAbbreviation == stateAbbrev],
-                laggedNewCases, row.names = NULL)
-  
-    if(rfError == TRUE) {
-      rfInt <- RFOOBInterval(randomForestDeathModel, x0 = x0)
-      deltaDeathPred <- rfInt$pred
-      rfLo <- rfInt$lo
-      rfUp <- rfInt$up
-    } else {
-      deltaDeathPred <- predict(randomForestDeathModel, newdata = x0)
-      rfLo <-deltaDeathPred
-      rfUp <-deltaDeathPred
+    for(k in 1:lagDays) {
+      laggedNewCases <- cbind(laggedNewCases, dplyr::lag(dCases,k-1)[-(1:(lagDays - 1))])
     }
-    newCaseSum <- rowSums(x0[,paste0("dCase", 1:lagDays)])
-    pctCap <- c(rep(.15, 30), rep(.08, length(newCaseSum) - 30))
-  
-    deltaDeathPredCap <- pmin(.07 * pctCap * newCaseSum, deltaDeathPred)
-    rfLoCap <- pmax(0, rfLo)
-    rfLoCap <- pmin(.01 * pctCap * newCaseSum, rfLoCap)
-    rfUpCap <- pmax(0, rfUp)
-    rfUpCap <- pmin(.15 * pctCap * newCaseSum, rfUpCap)
-  
-    deltaDeath <-  c(rep(0, lagDays), deltaDeathPredCap)
-  
-    if(ncol(state) >= lagDays) {
-      deltaDeath[2:lagDays] <- diff(state[2,1:lagDays])
-    } else {
-      deltaDeath[2:lagDays] <- 0
+    colnames(laggedNewCases)  <- paste0("dCase",  1:lagDays)
+         
+        
+    for(k in (nDay+1):nrow(stateFit)) {
+      laggedNewDeaths <- matrix(stateFit$D[(k-1):(k-lagDays)] - stateFit$D[(k-2):(k-lagDays-1)], nrow = 1)
+      colnames(laggedNewDeaths)  <- paste0("dDeaths",  1:lagDays)
+      
+        x0 <- cbind(t = k,covariates[covariates$location == stateAbbrev,-1],
+                    loc = which(states == stateAbbrev),
+                    population = stateInterventions$statePopulation[
+                      stateInterventions$stateAbbreviation == stateAbbrev],
+                    laggedNewCases[(k-lagDays-1), , drop = F], laggedNewDeaths, row.names = NULL)
+      
+      if(rfError == TRUE) {
+          rfInt <- RFOOBInterval(randomForestDeathModel, x0 = x0)
+          deltaDeathPred <- rfInt$pred
+          rfLo <- rfInt$lo
+          rfUp <- rfInt$up
+        } else {
+          deltaDeathPred <- predict(randomForestDeathModel, newdata = x0)
+          rfLo <-deltaDeathPred
+          rfUp <-deltaDeathPred
+        }
+        newCaseSum  <- sum(x0[,paste0("dCase", 1:lagDays)])
+        
+        pctCap <- .15 * (k <= 30) + .08 * (k >30)
+        deltaDeathPredCap <- min(.07 * pctCap * newCaseSum, deltaDeathPred)
+        rfLoCap <- max(0, rfLo)
+        rfLoCap <- min(.01 * pctCap * newCaseSum, rfLoCap)
+        rfUpCap <- max(0, rfUp)
+        rfUpCap <- min(.15 * pctCap * newCaseSum, rfUpCap)
+        
+        stateFit$D[k] <- stateFit$D[k-1] + deltaDeathPred
+        
+        stateFit$deathPred[k] <- deltaDeathPred
+        if(rfError) {
+          stateFit$deathLo[k] <- c(deltaDeath[1:lagDays], rfLoCap)
+          stateFit$deathUp[k] <- c(deltaDeath[1:lagDays], rfUpCap)
+        }
     }
-    deltaDeath[is.na(deltaDeath)] <- 0
-  
-    stateFit$D <- rep(0, length(stateFit$S))
-    stateFit$D <- cumsum(deltaDeath)
   
     stateFit$R <- stateFit$R - stateFit$D
   
-    stateFit$replicate <- M
+ #   stateFit$replicate <- M
   
-    stateFit$deathPred <- deltaDeath
-    if(rfError) {
-      stateFit$deathLo <- c(deltaDeath[1:lagDays], rfLoCap)
-      stateFit$deathUp <- c(deltaDeath[1:lagDays], rfUpCap)
-    }
+
     # ---
     
     
