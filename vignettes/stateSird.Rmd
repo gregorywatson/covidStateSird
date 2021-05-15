@@ -16,8 +16,27 @@ library(doParallel)
 
 
 # set final day of training data -----------------------------------------------
-endDate <- "2020-12-31"
+endDate <- "2021-03-09"
 minCase <- 100
+
+# toggles "demo" mode, when TRUE exectues an abbreviated run of the model ------
+DEMO <- TRUE
+
+DEMO <- TRUE
+
+if(DEMO) {
+  n.chains = 1
+  n.iter = 200
+  n.burnin = 10
+  n.thin = 20
+  ntree = 5
+} else{
+  n.chains = 3
+  n.iter = 200000
+  n.burnin = 10000
+  n.thin = 500
+  ntree = 500
+}
 
 # set RNG seed -----------------------------------------------------------------
 set.seed(525600)
@@ -26,7 +45,7 @@ covidDir <- "../"
 
 doParallel::registerDoParallel(cores=5)
 
-outputPath <- file.path(covidDir, "/Output", Sys.Date())
+outputPath <- file.path(covidDir, "Output", Sys.Date())
 dir.create(outputPath)
 dir.create(file.path(outputPath, "/Tables/"))
 dir.create(file.path(outputPath, "/Plots/"))
@@ -92,10 +111,10 @@ velocModel <- R2jags::jags(data = velocLogCasesList,
                            inits = NULL, 
                            parameters.to.save = params,
                            model.file = ar1JagsModel, 
-                           n.chains = 3, 
-                           n.iter = 200000, 
-                           n.burnin = 10000, 
-                           n.thin = 500, 
+                           n.chains = n.chains, 
+                           n.iter = n.iter, 
+                           n.burnin = n.burnin, 
+                           n.thin = n.thin, 
                            DIC = F)
 
 timeElapsed <- (Sys.time() - start)
@@ -117,7 +136,8 @@ randomForestDeathModel <- deathForest(stateCovidData,
                                       covariates, 
                                       21, 
                                       fileOut = paste0(outputPath, 
-                                      "/randomForestDeathModel.Rdata"))
+                                      "/randomForestDeathModel.Rdata"),
+                                      ntree = ntree)
 
 load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
 
@@ -136,12 +156,13 @@ foreach(i = 1:length(states)) %dopar% {
             stateCovidData,
             randomForestDeathModel,
             posteriorSamples,
-            rfError = FALSE,
+            rfError = TRUE,
             plots = TRUE,
+            n.t = 120,
             lagDays = 21,
             minCases = 100,
             endDay = endDate,
-            endPlotDay = "2021-03-01")
+            endPlotDay = "2021-05-01")
 }
 ```
 

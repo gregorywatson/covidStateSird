@@ -98,10 +98,10 @@ plotDailyDeaths <- function(allD, allStateFit, stateFit, state, days, plotT, end
     qDD <- t(apply(allDD, 1, quantile, probs = c(.05, .5,  .95),  na.rm = TRUE))[1:length(plotT),]
   
     if(rfError) {
-      wideDeathLo <- matrix(allStateFit$deathLo, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
-      qDD[,1] <- t(apply(wideDeathLo, 1, quantile, probs = c(.05,.5),  na.rm = TRUE))[1:length(plotT),1]
-      wideDeathUp <- matrix(allStateFit$deathUp, nrow = length(stateFit$times), ncol = length(SAMPS), byrow = F)
-      qDD[,3] <- t(apply(wideDeathUp, 1, quantile, probs = c(.95,.5),  na.rm = TRUE))[1:length(plotT),1]
+      wideDeathLo <- matrix(allStateFit$deathLo, nrow = length(stateFit$times), ncol = ncol(allD), byrow = F)
+      qDD[,1] <- t(apply(apply(wideDeathLo, 2, diff), 1, quantile, probs = c(.05,.5),  na.rm = TRUE))[1:length(plotT),1]
+      wideDeathUp <- matrix(allStateFit$deathUp, nrow = length(stateFit$times), ncol = ncol(allD), byrow = F)
+      qDD[,3] <- t(apply(apply(wideDeathUp, 2, diff), 1, quantile, probs = c(.95,.5),  na.rm = TRUE))[1:length(plotT),1]
     }
   
     plot(plotT, qDD[,2], col = NA, ylim = c(0, max(qDD[,3]) * 1.04), xaxs = "i", xaxt = "n",
@@ -203,7 +203,7 @@ plotPropDeath <- function(allPropDead, plotT, endPlot, plotCol = plotCols[2]) {
   
     qC <- t(apply(allPropDead, 1, quantile, probs = c(.05, .5,  .95),  na.rm = TRUE))[1:length(plotT),]
     nomiss <- !is.na(rowSums(qC))
-    plot(plotT, qC[, 2], col = NA, ylim = c(0, max(qC[nomiss,3])), xaxs = "i", xaxt = "n",
+    plot(plotT, qC[, 2], col = NA, ylim = c(0, min(.12, max(qC[nomiss,3]))), xaxs = "i", xaxt = "n",
          yaxt = "n", ylab = "", xlab = "")
   
     polygon(c(plotT[nomiss], rev(plotT[nomiss])),

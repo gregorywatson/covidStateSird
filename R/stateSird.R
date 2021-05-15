@@ -63,7 +63,6 @@ stateSird <- function(stateAbbrev,
 
   lastObs <- ncol(state)
 
-  #n.t <- 201
   N.POST <- max(1, nrow(posteriorSamples$u))
   allStateFit <- NULL
 
@@ -165,8 +164,8 @@ stateSird <- function(stateAbbrev,
         
         stateFit$deathPred[k] <- deltaDeathPred
         if(rfError) {
-          stateFit$deathLo[k] <- c(deltaDeath[1:lagDays], rfLoCap)
-          stateFit$deathUp[k] <- c(deltaDeath[1:lagDays], rfUpCap)
+          stateFit$deathLo[k] <- rfLoCap #c(deltaDeath[1:lagDays], rfLoCap)
+          stateFit$deathUp[k] <- rfUpCap #c(deltaDeath[1:lagDays], rfUpCap)
         }
     }
   
