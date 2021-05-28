@@ -1,0 +1,191 @@
+---
+title: "SIRD Analysis"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\usepackage[utf8]{inputenc}
+---
+
+# SIRD Analysis
+
+```{r load_libraries}
+# library(covidStateSird)
+library(foreach)
+library(doParallel)
+
+
+# set final day of training data -----------------------------------------------
+endDate <- "2021-05-27"
+minCase <- 1000
+
+# toggles "demo" mode, when TRUE exectues an abbreviated run of the model ------
+DEMO <- FALSE
+
+if(DEMO) {
+  n.chains = 1
+  n.iter = 200
+  n.burnin = 10
+  n.thin = 20
+  ntree = 5
+} else{
+  n.chains = 3
+  n.iter = 200000
+  n.burnin = 10000
+  n.thin = 1900
+  ntree = 500
+}
+
+# set RNG seed -----------------------------------------------------------------
+set.seed(525600)
+
+covidDir <- "../"
+
+doParallel::registerDoParallel(cores=5)
+
+outputPath <- file.path(covidDir, "Output", Sys.Date())
+dir.create(outputPath)
+dir.create(file.path(outputPath, "/Tables/"))
+dir.create(file.path(outputPath, "/Plots/"))
+dir.create(file.path(outputPath, "/Data/"))
+
+stateInterventions <- read.csv(paste0(covidDir,
+                               "Data/StateInterventionDates.csv"),
+                               stringsAsFactors = FALSE,
+                               header = TRUE)
+
+# stateDataCSV <- "https://raw.githubusercontent.com/COVID19Tracking/covid-public-api/master/v1/states/daily.csv"
+# ----updated data-----
+stateDataCSV <- "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv"
+fips <- read.table(paste0(covidDir, 'state.txt'), header = TRUE, sep = "|")
+stateCovidData <- read.csv(stateDataCSV)
+stateCovidData <- merge(x = stateCovidData, y = fips, by.x = "fips", by.y = "STATE", all.x = TRUE)
+
+# covariates for death model ---------------------------------------------------
+covariates <- read.csv(paste0(covidDir, 
+                       "Data/COVID-19 Location Covariates - analyticStates.csv"))
+covariates[, c("heartDisease", "lungCancer", "diabetes", "copd")] <-
+  covariates[, c("heartDisease", "lungCancer", "diabetes", "copd")] / 100000
+
+# Exclude stroke, because it is missing for 5 states 
+covariates <- covariates[, -which(names(covariates) == "stroke")]
+
+states <- c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DE", "FL", "GA", 
+            "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", 
+            "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", 
+            "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", 
+            "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
+ 
+velocLogCases <- velocLogDeaths <- data.frame()
+loc <- 0
+for(i in 1:length(states)) {
+  loc <- loc + 1
+
+  velocLoc <- velocitiesState(stateCovidData, states[i], stateInterventions, 
+                              minCases = minCase, endDate = endDate)
+  population <- stateInterventions$statePopulation[stateInterventions$stateAbbreviation == states[i]]
+  
+  velocLogCases <- rbind(velocLogCases, cbind(velocLoc$cases, loc, 
+                         row.names = NULL))
+}
+
+velocLogCases$y[velocLogCases$y <= 0] <- NA
+velocLogCases <- velocLogCases[complete.cases(velocLogCases),]
+ 
+ 
+locs <- unique(velocLogCases $loc)
+firstObs <- rep(NA, length(locs))
+for(i in 1:length(locs)) {
+  firstObs [i] <- min(which(velocLogCases$loc == locs[i]))
+}
+
+velocLogCasesList = list(y = velocLogCases$y, 
+                 N = table(velocLogCases$loc), 
+                 nLoc = length(locs), 
+                 firstObs = firstObs)
+
+params = c("tau", "u", "mu", "phi")
+
+start <- Sys.time()
+
+velocModel <- R2jags::jags(data = velocLogCasesList, 
+                           inits = NULL, 
+                           parameters.to.save = params,
+                           model.file = ar1JagsModel, 
+                           n.chains = n.chains, 
+                           n.iter = n.iter, 
+                           n.burnin = n.burnin, 
+                           n.thin = n.thin, 
+                           DIC = F)
+
+timeElapsed <- (Sys.time() - start)
+timeElapsed
+
+# plotVelocityFit(velocModel$BUGSoutput$mean,
+#                stateCovidData, states, stateInterventions,
+#                fileName = paste0(outputPath, "/Plots/velocityModelFit.pdf"))
+
+
+posteriorSamples <- velocModel$BUGSoutput$sims.list
+
+save(posteriorSamples,
+  file = paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
+
+
+# train death model ------------------------------------------------------------
+library(randomForest)
+randomForestDeathModel <- deathForest(stateCovidData, 
+                                      states, 
+                                      covariates, 
+                                      21, 
+                                      fileOut = paste0(outputPath, 
+                                      "/randomForestDeathModel.Rdata"),
+                                      ntree = ntree)
+
+load(paste0(outputPath, "/CasePosteriorSamples", endDate, ".Rdata"))
+
+# test on CA
+# stateSird("CA", covariates, stateInterventions, stateCovidData, 
+# randomForestDeathModel, posteriorSamples, rfError = T, plots = T, 
+# endPlotDay = "2021-03-01")
+library(dplyr)
+start <- Sys.time()
+stateSird('CA',
+            states,
+            covariates,
+            stateInterventions,
+            velocLogCases,
+            stateCovidData,
+            randomForestDeathModel,
+            posteriorSamples,
+            rfError = TRUE,
+            plots = TRUE,
+            n.t = 120,
+            lagDays = 21,
+            minCases = 1000,
+            endDay = endDate,
+            endPlotDay = "2021-06-15")
+timeElapsed <- (Sys.time() - start)
+timeElapsed
+```
+```{r}
+# run state SIRD models --------------------------------------------------------
+foreach(i = 1:length(states)) %dopar% {
+  stateSird(states[i],
+            states,
+            covariates,
+            stateInterventions,
+            velocLogCases,
+            stateCovidData,
+            randomForestDeathModel,
+            posteriorSamples,
+            rfError = TRUE,
+            plots = TRUE,
+            n.t = 120,
+            lagDays = 21,
+            minCases = 100,
+            endDay = endDate,
+            endPlotDay = "2021-06-01")
+}
+```
+
