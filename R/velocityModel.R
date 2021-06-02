@@ -31,12 +31,12 @@ velocitiesState <- function(statesLong, stateAbbrev, stateInterventions = NULL, 
   
   y <- log(state[1, !is.na(state[1,]) & (days <= endDate)])
   x <- which(!is.na(state[1,]) & (days <= endDate))
-  splineCases <- smooth.spline(x = x[y > - Inf], y = y[y > -Inf])
+  splineCases <- smooth.spline(x = x[y > - Inf], y = y[y > -Inf], df = length(y)/10)
   derivCases <- predict(splineCases, deriv = 1)
   
   y <- log(state[2, !is.na(state[2,]) & (days <= endDate)])
   x <- which(!is.na(state[2,]) & (days <= endDate))
-  splineDeaths <- smooth.spline(x = x[y > - Inf], y = y[y > -Inf])
+  splineDeaths <- smooth.spline(x = x[y > - Inf], y = y[y > -Inf], df = length(y)/10)
   derivDeaths <- predict(splineDeaths, deriv = 1)
   
   return(list(cases = data.frame(y = derivCases$y,
